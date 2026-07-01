@@ -11,7 +11,9 @@ module.exports = function (api) {
           logTimings: true,
         },
       ],
-      // re-add 'react-native-reanimated/plugin' in Phase 5 when swipe gestures are needed
+      // Required by react-native-reanimated v4 (used by the drawer navigator).
+      // Must be listed last.
+      'react-native-worklets/plugin',
     ],
   };
 };

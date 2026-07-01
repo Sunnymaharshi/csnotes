@@ -2,22 +2,31 @@ import { useEffect, useState } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { TamaguiProvider, Theme } from 'tamagui';
 import { useColorScheme } from 'react-native';
-import { onAuthStateChanged, type User } from 'firebase/auth';
-import { auth } from '../src/data/firebase';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { getAuth, onAuthStateChanged, type FirebaseAuthTypes } from '@react-native-firebase/auth';
 import { useNotesStore } from '../src/store/notesStore';
 import { createFirestoreRepo } from '../src/data/firestoreNotesRepo';
+import { useNotesWatcher } from '../src/hooks/useNotesWatcher';
+import { useThemeStore } from '../src/store/themeStore';
 import tamaguiConfig from '../tamagui.config';
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  const systemScheme = useColorScheme();
+  const { themeMode, loaded: themeLoaded, loadThemeMode } = useThemeStore();
   // undefined = auth state not yet resolved (loading)
-  const [user, setUser] = useState<User | null | undefined>(undefined);
+  const [user, setUser] = useState<FirebaseAuthTypes.User | null | undefined>(undefined);
   const setRepo = useNotesStore((s) => s.setRepo);
   const router = useRouter();
   const segments = useSegments();
+  useNotesWatcher();
+
+  useEffect(() => { loadThemeMode(); }, [loadThemeMode]);
+
+  const effectiveScheme: 'light' | 'dark' =
+    themeMode === 'system' ? (systemScheme === 'dark' ? 'dark' : 'light') : themeMode;
 
   useEffect(() => {
-    return onAuthStateChanged(auth, (u) => {
+    return onAuthStateChanged(getAuth(), (u) => {
       setUser(u);
       if (u) {
         setRepo(createFirestoreRepo(u.uid));
@@ -39,21 +48,19 @@ export default function RootLayout() {
 
   // Render nothing while Firebase resolves the initial auth state to avoid
   // flashing the wrong screen before the redirect fires.
-  if (user === undefined) return null;
+  if (user === undefined || !themeLoaded) return null;
 
   return (
-    <TamaguiProvider config={tamaguiConfig} defaultTheme={colorScheme === 'dark' ? 'dark' : 'light'}>
-      <Theme name={colorScheme === 'dark' ? 'dark' : 'light'}>
-        <Stack>
-          <Stack.Screen name="sign-in" options={{ headerShown: false }} />
-          <Stack.Screen name="index" options={{ title: 'CS Notes' }} />
-          <Stack.Screen name="favourites" options={{ title: 'Favourites' }} />
-          <Stack.Screen name="archived" options={{ title: 'Archived' }} />
-          <Stack.Screen name="trash" options={{ title: 'Trash' }} />
-          <Stack.Screen name="note/[id]" options={{ title: 'Note' }} />
-          <Stack.Screen name="settings" options={{ title: 'Settings' }} />
-        </Stack>
-      </Theme>
-    </TamaguiProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <TamaguiProvider config={tamaguiConfig} defaultTheme={effectiveScheme}>
+        <Theme name={effectiveScheme}>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="sign-in" />
+            <Stack.Screen name="(drawer)" />
+            <Stack.Screen name="note/[id]" options={{ headerShown: true, title: 'My Notes' }} />
+          </Stack>
+        </Theme>
+      </TamaguiProvider>
+    </GestureHandlerRootView>
   );
 }

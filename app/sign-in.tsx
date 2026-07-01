@@ -12,8 +12,10 @@ export default function SignInScreen() {
     setError(null);
     try {
       await signInWithGoogle();
-    } catch {
-      setError('Sign-in failed. Please try again.');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[sign-in]', msg);
+      setError(msg);
     } finally {
       setLoading(false);
     }

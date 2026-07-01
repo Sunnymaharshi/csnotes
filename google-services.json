@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "662643279247-2kjb9a1oo429q23ihe8b371fbtu71mkg.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sunny.csnotes",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
           "client_id": "662643279247-rqj7c1rctemqp6r3vdvcrdb5d29sci2h.apps.googleusercontent.com",
           "client_type": 3
         }

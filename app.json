@@ -7,11 +7,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "scheme": "csnotes",
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.sunny.csnotes"
-    },
-    "android": {
+"android": {
       "package": "com.sunny.csnotes",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
@@ -22,14 +18,13 @@
       },
       "predictiveBackGestureEnabled": false
     },
-    "web": {
-      "favicon": "./assets/favicon.png",
-      "bundler": "metro"
-    },
     "plugins": [
       "expo-router",
       "expo-status-bar",
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      "expo-sharing",
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth"
     ]
   }
 }
