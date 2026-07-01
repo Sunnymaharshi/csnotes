@@ -4,6 +4,7 @@
   "main": "index.ts",
   "dependencies": {
     "@expo/metro-config": "^57.0.2",
+    "@react-native-google-signin/google-signin": "^16.1.2",
     "@shopify/flash-list": "^2.3.2",
     "@tamagui/babel-plugin": "^2.4.0",
     "@tamagui/config": "^2.4.0",
