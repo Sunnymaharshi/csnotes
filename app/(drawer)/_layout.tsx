@@ -1,17 +1,24 @@
+import { memo } from 'react';
 import { Drawer } from 'expo-router/drawer';
 import { usePathname, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Separator, useTheme } from 'tamagui';
 import { Pressable, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Moon, ClipboardList, Settings } from 'lucide-react-native';
+import { Moon, ClipboardList, Settings, Star, Archive, Trash2 } from 'lucide-react-native';
 
 type IconType = typeof ClipboardList;
 
 const NAV_ITEMS: { label: string; route: string; icon: IconType }[] = [
-  { label: 'CS Notes', route: '/', icon: ClipboardList },
+  { label: 'All Notes', route: '/', icon: ClipboardList },
 ];
 
-function DrawerItem({
+const CATEGORY_ITEMS: { label: string; route: string; icon: IconType }[] = [
+  { label: 'Favourites', route: '/favourites', icon: Star },
+  { label: 'Archived', route: '/archived', icon: Archive },
+  { label: 'Trash', route: '/trash', icon: Trash2 },
+];
+
+const DrawerItem = memo(function DrawerItem({
   label,
   icon: Icon,
   active,
@@ -40,7 +47,7 @@ function DrawerItem({
       </XStack>
     </Pressable>
   );
-}
+});
 
 function CustomDrawerContent() {
   const router = useRouter();
@@ -67,7 +74,22 @@ function CustomDrawerContent() {
             label={item.label}
             icon={item.icon}
             active={pathname === item.route}
-            onPress={() => router.push(item.route as never)}
+            onPress={() => router.navigate(item.route as never)}
+          />
+        ))}
+      </YStack>
+      <Separator marginVertical="$3" borderColor="$color4" />
+      <YStack paddingHorizontal="$2" gap="$1">
+        <Text fontSize="$2" fontWeight="600" color="$color9" paddingHorizontal="$2" paddingVertical="$2">
+          CATEGORIES
+        </Text>
+        {CATEGORY_ITEMS.map((item) => (
+          <DrawerItem
+            key={item.route}
+            label={item.label}
+            icon={item.icon}
+            active={pathname === item.route}
+            onPress={() => router.navigate(item.route as never)}
           />
         ))}
       </YStack>
@@ -77,7 +99,7 @@ function CustomDrawerContent() {
           label="Settings"
           icon={Settings}
           active={pathname === '/settings'}
-          onPress={() => router.push('/settings')}
+          onPress={() => router.navigate('/settings')}
         />
       </YStack>
     </ScrollView>
@@ -97,13 +119,17 @@ export default function DrawerLayout() {
         headerShadowVisible: false,
         drawerStyle: { backgroundColor: theme.color1.val },
         sceneStyle: { backgroundColor: theme.color1.val },
+        drawerType: 'front',
+        overlayColor: 'rgba(0,0,0,0.5)',
+        swipeEdgeWidth: 60,
+        swipeMinDistance: 15,
       }}
     >
-      <Drawer.Screen name="index" options={{ title: 'CS Notes' }} />
+      <Drawer.Screen name="index" options={{ title: 'All Notes' }} />
       <Drawer.Screen name="settings" options={{ title: 'Settings' }} />
-      <Drawer.Screen name="favourites" options={{ drawerItemStyle: { display: 'none' } }} />
-      <Drawer.Screen name="archived" options={{ drawerItemStyle: { display: 'none' } }} />
-      <Drawer.Screen name="trash" options={{ drawerItemStyle: { display: 'none' } }} />
+      <Drawer.Screen name="favourites" options={{ title: 'Favourites' }} />
+      <Drawer.Screen name="archived" options={{ title: 'Archived' }} />
+      <Drawer.Screen name="trash" options={{ title: 'Trash' }} />
     </Drawer>
   );
 }

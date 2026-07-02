@@ -59,6 +59,8 @@ const darkGray = {
   placeholderColor: '#6f6f6f',
 };
 
+export const screenBackground = { light: lightGray.color1, dark: darkGray.color1 };
+
 const themes = {
   ...config.themes,
   light: { ...config.themes.light, ...lightGray },

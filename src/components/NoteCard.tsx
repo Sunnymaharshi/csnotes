@@ -1,25 +1,39 @@
+import { memo } from 'react';
 import { Pressable } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import { useRouter } from 'expo-router';
 import type { Note } from '../types/Note';
 import { compactDate } from '../lib/compactDate';
 
-export function NoteCard({ note }: { note: Note }) {
+export const NoteCard = memo(function NoteCard({
+  note,
+  selectionMode = false,
+  selected = false,
+  onLongPress,
+  onToggleSelect,
+}: {
+  note: Note;
+  selectionMode?: boolean;
+  selected?: boolean;
+  onLongPress?: () => void;
+  onToggleSelect?: () => void;
+}) {
   const router = useRouter();
 
   return (
     <Pressable
-      onPress={() => router.push(`/note/${note.id}`)}
+      onPress={() => (selectionMode ? onToggleSelect?.() : router.push(`/note/${note.id}`))}
+      onLongPress={onLongPress}
       style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
     >
       <YStack
-        backgroundColor="$color2"
+        backgroundColor={selected ? '$color3' : '$color2'}
         borderRadius="$4"
         paddingHorizontal="$4"
         paddingVertical="$3"
         gap="$2"
-        borderWidth={1}
-        borderColor="$color4"
+        borderWidth={selected ? 2 : 1}
+        borderColor={selected ? '$color8' : '$color4'}
       >
         <Text fontSize="$5" fontWeight="700" color="$color12" numberOfLines={8}>
           {note.text.trim() || 'Empty note'}
@@ -32,4 +46,4 @@ export function NoteCard({ note }: { note: Note }) {
       </YStack>
     </Pressable>
   );
-}
+});

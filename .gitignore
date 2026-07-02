@@ -44,3 +44,7 @@ yarn-error.*
 # Firebase config (contains API keys)
 google-services.json
 GoogleService-Info.plist
+
+# Personal data / migration artifacts
+scripts/*.db
+scripts/notes-export.json

@@ -59,8 +59,8 @@ export function createFirestoreRepo(uid: string): NotesRepository {
       return snap.exists() ? toNote(snap.data() as Record<string, unknown>, snap.id) : null;
     },
 
-    async createNote(data) {
-      const id = randomUUID();
+    async createNote({ id: requestedId, ...data }) {
+      const id = requestedId ?? randomUUID();
       const now = Date.now();
       const note: Note = { ...data, id, createdAt: now, updatedAt: now };
       await col.doc(id).set(note);
@@ -76,7 +76,12 @@ export function createFirestoreRepo(uid: string): NotesRepository {
     },
 
     async trashNote(id) {
-      await col.doc(id).update({ deletedAt: Date.now(), updatedAt: Date.now() });
+      await col.doc(id).update({
+        deletedAt: Date.now(),
+        isFavourite: false,
+        isArchived: false,
+        updatedAt: Date.now(),
+      });
     },
 
     async restoreNote(id) {
@@ -85,6 +90,20 @@ export function createFirestoreRepo(uid: string): NotesRepository {
 
     async emptyTrash() {
       const snap = await col.where('deletedAt', '!=', null).get();
+      const batch = firestore().batch();
+      snap.docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    },
+
+    async restoreAllTrash() {
+      const snap = await col.where('deletedAt', '!=', null).get();
+      const batch = firestore().batch();
+      snap.docs.forEach((d) => batch.update(d.ref, { deletedAt: null, updatedAt: Date.now() }));
+      await batch.commit();
+    },
+
+    async deleteEverything() {
+      const snap = await col.get();
       const batch = firestore().batch();
       snap.docs.forEach((d) => batch.delete(d.ref));
       await batch.commit();

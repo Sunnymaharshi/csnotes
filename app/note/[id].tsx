@@ -6,8 +6,8 @@ import {
   Platform,
   Share,
   Pressable,
-  Alert,
   ToastAndroid,
+  Keyboard,
 } from 'react-native';
 import { YStack, XStack, Text, useTheme } from 'tamagui';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,28 +15,43 @@ import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { Star, Archive, ArchiveRestore, Check, Share2, Trash2 } from 'lucide-react-native';
 import { useNotesStore } from '../../src/store/notesStore';
 import { fullDateTime } from '../../src/lib/compactDate';
-import type { NotesRepository } from '../../src/data/NotesRepository';
+import { confirmDeleteNoteForever } from '../../src/lib/globalOverflowActions';
 import { randomUUID } from '../../src/lib/uuid';
+import type { NotesRepository } from '../../src/data/NotesRepository';
+
+function showToast(message: string) {
+  ToastAndroid.show(message, ToastAndroid.SHORT);
+}
 
 function NoteHeaderRight({
+  targetId,
   onDone,
 }: {
+  targetId: string | null;
   onDone: () => void;
 }) {
-  const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
   const repo = useNotesStore((s) => s.repo) as NotesRepository;
   const note = useNotesStore(
-    (s) => s.allNotes.find((n) => n.id === id) ?? s.archived.find((n) => n.id === id),
+    (s) =>
+      s.allNotes.find((n) => n.id === targetId) ??
+      s.archived.find((n) => n.id === targetId) ??
+      s.trash.find((n) => n.id === targetId),
   );
-  const isNew = id === 'new';
   const isArchived = note?.isArchived ?? false;
   const iconColor = theme.color12.val;
 
+  // Archiving is the last action the user took, so it always wins: it un-trashes
+  // the note (if it was trashed) and un-favourites it (isFavourite/isArchived are
+  // mutually exclusive).
   async function handleArchive() {
-    if (isNew) { ToastAndroid.show('Save the note first', ToastAndroid.SHORT); return; }
+    if (!targetId) { showToast('Save the note first'); return; }
     if (!repo || !note) return;
-    await repo.updateNote(id, { isArchived: !isArchived });
+    await repo.updateNote(targetId, {
+      isArchived: !isArchived,
+      isFavourite: isArchived ? note.isFavourite : false,
+      deletedAt: null,
+    });
     onDone();
   }
 
@@ -57,7 +72,7 @@ function NoteHeaderRight({
 }
 
 export default function NoteScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, sharedText } = useLocalSearchParams<{ id: string; sharedText?: string }>();
   const isNew = id === 'new';
   const router = useRouter();
   const navigation = useNavigation();
@@ -65,11 +80,15 @@ export default function NoteScreen() {
   const repo = useNotesStore((s) => s.repo);
   const setTrashUndo = useNotesStore((s) => s.setTrashUndo);
 
+  const [savedId, setSavedId] = useState<string | null>(null);
+  const targetId = isNew ? savedId : id;
+
   const note = useNotesStore(
     (s) =>
-      s.allNotes.find((n) => n.id === id) ??
-      s.archived.find((n) => n.id === id) ??
-      s.favourites.find((n) => n.id === id),
+      s.allNotes.find((n) => n.id === targetId) ??
+      s.archived.find((n) => n.id === targetId) ??
+      s.favourites.find((n) => n.id === targetId) ??
+      s.trash.find((n) => n.id === targetId),
   );
 
   const [text, setText] = useState('');
@@ -78,13 +97,19 @@ export default function NoteScreen() {
 
   useEffect(() => {
     if (isNew && !initialized) {
+      if (sharedText) {
+        // Shared-in text counts as unsaved content, same as if the user had
+        // typed it: back navigation saves it, force-closing the app discards it.
+        setText(sharedText);
+        pendingSave.current = true;
+      }
       setInitialized(true);
     } else if (!isNew && note && !initialized) {
       setText(note.text);
       originalTextRef.current = note.text;
       setInitialized(true);
     }
-  }, [note, initialized, isNew]);
+  }, [note, initialized, isNew, sharedText]);
 
   const textRef = useRef('');
   textRef.current = text;
@@ -93,143 +118,88 @@ export default function NoteScreen() {
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSave = useRef(false);
+  // Once a "new" note has been created, this holds its real id so further
+  // saves update that note instead of creating duplicates.
+  const createdIdRef = useRef<string | null>(null);
 
-  const flushSave = useRef(async (noteId: string) => {
-    if (!pendingSave.current || !repoRef.current) return;
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = null;
-    await repoRef.current.updateNote(noteId, { text: textRef.current });
-    pendingSave.current = false;
-  });
-
-  function handleChange(value: string) {
-    setText(value);
-    pendingSave.current = true;
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    if (!isNew) {
-      saveTimerRef.current = setTimeout(async () => {
-        if (repoRef.current && id) {
-          await repoRef.current.updateNote(id, { text: value });
-          pendingSave.current = false;
-        }
-      }, 600);
+  // Creates the note on first save, updates it on every save after that.
+  // The id is claimed synchronously (before any await) so a second save
+  // triggered while the first is still in flight (e.g. offline, where the
+  // write promise can take a while to settle) updates the same doc instead
+  // of racing to create a duplicate.
+  // Toasting from here (rather than each caller) means every save path —
+  // autosave, the tick button, back navigation, unmount flush — reports
+  // consistently, even when the save is fired-and-forgotten (e.g. offline back).
+  const saveNow = useRef(async () => {
+    if (!repoRef.current) return;
+    const content = textRef.current;
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
     }
-  }
-
-  // Called when user taps Check (tick)
-  async function handleDone() {
-    if (isNew) {
-      const content = textRef.current.trim();
-      if (!content) {
-        // Empty new note — confirm discard
-        Alert.alert(
-          'Empty Note',
-          'Discard this empty note?',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Discard', style: 'destructive', onPress: () => router.back() },
-          ],
-        );
-        return;
-      }
-      // Create the note now
-      if (!repoRef.current) return;
+    if (isNew && !createdIdRef.current) {
+      if (!content.trim()) return;
       const newId = randomUUID();
+      createdIdRef.current = newId;
+      setSavedId(newId);
       await repoRef.current.createNote({
-        text: textRef.current,
+        id: newId,
+        text: content,
         isFavourite: false,
         isArchived: false,
         deletedAt: null,
       });
-      pendingSave.current = false;
-      router.back();
+      showToast('Saved');
     } else {
-      await flushSave.current(id);
-      router.back();
+      const targetId = isNew ? createdIdRef.current : id;
+      if (!targetId) return;
+      await repoRef.current.updateNote(targetId, { text: content });
+      showToast('Updated');
     }
+    pendingSave.current = false;
+  });
+
+  // No autosave while typing — a save only happens via the tick button,
+  // navigating back, or unmount, so closing the app mid-edit discards changes.
+  function handleChange(value: string) {
+    setText(value);
+    pendingSave.current = true;
+  }
+
+  // Called when user taps Check (tick) — saves in place, stays on screen.
+  async function handleDone() {
+    Keyboard.dismiss();
+    const content = textRef.current.trim();
+    if (isNew && !createdIdRef.current && !content) {
+      showToast('Note cannot be empty');
+      return;
+    }
+    if (!pendingSave.current) {
+      showToast('No new changes');
+      return;
+    }
+    saveNow.current();
   }
 
   // Intercept hardware back / gesture
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
       const content = textRef.current.trim();
-      const isDirty = isNew ? content.length > 0 : pendingSave.current;
       const isEmpty = content.length === 0;
 
-      if (isNew && isEmpty) {
-        // Empty new note — confirm discard
-        e.preventDefault();
-        Alert.alert(
-          'Discard Note?',
-          'This note is empty and won\'t be saved.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Discard',
-              style: 'destructive',
-              onPress: () => navigation.dispatch(e.data.action),
-            },
-          ],
-        );
+      if (isNew && !createdIdRef.current && isEmpty) {
+        // Never saved and nothing to save — silently discard
         return;
       }
 
-      if (isNew && isDirty) {
+      if (pendingSave.current) {
+        // Kick off the save (create once, then update) but don't block
+        // leaving on it — Firestore applies the write to the local cache
+        // and this screen's watchers immediately, so there's no need to
+        // wait for the server ack (which can hang indefinitely offline).
         e.preventDefault();
-        Alert.alert(
-          'Save Note?',
-          '',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Discard',
-              style: 'destructive',
-              onPress: () => navigation.dispatch(e.data.action),
-            },
-            {
-              text: 'Save',
-              onPress: async () => {
-                if (repoRef.current) {
-                  await repoRef.current.createNote({
-                    text: textRef.current,
-                    isFavourite: false,
-                    isArchived: false,
-                    deletedAt: null,
-                  });
-                }
-                navigation.dispatch(e.data.action);
-              },
-            },
-          ],
-        );
-        return;
-      }
-
-      if (!isNew && isDirty) {
-        e.preventDefault();
-        Alert.alert(
-          'Unsaved Changes',
-          'Save changes before exiting?',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Discard',
-              style: 'destructive',
-              onPress: () => {
-                if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-                pendingSave.current = false;
-                navigation.dispatch(e.data.action);
-              },
-            },
-            {
-              text: 'Save',
-              onPress: async () => {
-                await flushSave.current(id);
-                navigation.dispatch(e.data.action);
-              },
-            },
-          ],
-        );
+        saveNow.current();
+        navigation.dispatch(e.data.action);
       }
     });
     return unsubscribe;
@@ -237,48 +207,68 @@ export default function NoteScreen() {
 
   useEffect(() => {
     navigation.setOptions({
-      headerRight: () => <NoteHeaderRight onDone={handleDone} />,
+      headerRight: () => <NoteHeaderRight targetId={targetId} onDone={handleDone} />,
     });
-  }, [navigation, id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigation, id, targetId]);
 
-  // Flush pending save on unmount (existing notes only)
+  // Flush pending save on unmount
   useEffect(() => {
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      if (!isNew && pendingSave.current && repoRef.current && id) {
-        repoRef.current.updateNote(id, { text: textRef.current });
+      if (pendingSave.current) {
+        saveNow.current();
       }
     };
   }, [id, isNew]);
 
   function toastNotSaved() {
-    ToastAndroid.show('Save the note first', ToastAndroid.SHORT);
+    showToast('Save the note first');
   }
 
+  const isTrashed = note?.deletedAt != null;
+
+  // Favouriting is the last action the user took, so it always wins: it un-trashes
+  // the note (if it was trashed) and un-archives it (isFavourite/isArchived are
+  // mutually exclusive).
   async function handleFavourite() {
-    if (isNew) { toastNotSaved(); return; }
+    if (!targetId) { toastNotSaved(); return; }
     if (!repoRef.current || !note) return;
-    await repoRef.current.updateNote(id, { isFavourite: !note.isFavourite });
+    await repoRef.current.updateNote(targetId, {
+      isFavourite: !note.isFavourite,
+      isArchived: note.isFavourite ? note.isArchived : false,
+      deletedAt: null,
+    });
   }
 
   async function handleShare() {
     await Share.share({ message: textRef.current.trim() || 'Empty note' });
   }
 
-  async function handleDelete() {
-    if (isNew) { toastNotSaved(); return; }
-    if (!repoRef.current || !id) return;
-    await flushSave.current(id);
-    await repoRef.current.trashNote(id);
-    const firstLine = textRef.current.split('\n')[0].trim();
-    setTrashUndo({ id, label: firstLine || 'Untitled' });
-    router.back();
+  function handleDelete() {
+    if (!targetId) { toastNotSaved(); return; }
+    if (!repoRef.current) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    if (isTrashed) {
+      // Already in trash — this permanently deletes it, so confirm first and skip the undo toast.
+      confirmDeleteNoteForever(async () => {
+        await repoRef.current!.deleteNote(targetId);
+        router.back();
+      });
+      return;
+    }
+    (async () => {
+      await repoRef.current!.trashNote(targetId);
+      const firstLine = textRef.current.split('\n')[0].trim();
+      setTrashUndo({ id: targetId, label: firstLine || 'Untitled' });
+      router.back();
+    })();
   }
 
   const isFavourite = note?.isFavourite ?? false;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: theme.color1.val }]} edges={['bottom']}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -324,7 +314,7 @@ export default function NoteScreen() {
             onPress={handleShare}
           />
           <BottomAction
-            label="delete"
+            label={isTrashed ? 'delete forever' : 'delete'}
             icon={<Trash2 size={22} color={theme.color10.val} />}
             onPress={handleDelete}
           />

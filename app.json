@@ -24,7 +24,14 @@
       "@react-native-google-signin/google-signin",
       "expo-sharing",
       "@react-native-firebase/app",
-      "@react-native-firebase/auth"
+      "@react-native-firebase/auth",
+      [
+        "expo-share-intent",
+        {
+          "androidIntentFilters": ["text/*"],
+          "disableIOS": true
+        }
+      ]
     ]
   }
 }
