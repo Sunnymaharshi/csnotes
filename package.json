@@ -18,6 +18,7 @@
     "expo-crypto": "~57.0.0",
     "expo-document-picker": "~57.0.0",
     "expo-file-system": "~57.0.0",
+    "expo-haptics": "~57.0.0",
     "expo-linking": "~57.0.1",
     "expo-router": "~57.0.2",
     "expo-share-intent": "^7.0.0",
@@ -52,7 +53,8 @@
     "start": "expo start",
     "start:clear": "expo start --clear",
     "android": "expo run:android",
-    "android:build": "expo run:android",
+    "android:device": "expo run:android --device",
+    "android:release": "expo run:android --device --variant release",
     "typecheck": "node node_modules/typescript/lib/tsc.js --noEmit"
   },
   "private": true

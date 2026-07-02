@@ -1,10 +1,14 @@
 import { useCallback, useLayoutEffect } from 'react';
-import { StyleSheet, View, Pressable } from 'react-native';
+import { StyleSheet, View, useColorScheme } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { YStack, Text } from 'tamagui';
+import { YStack, useTheme } from 'tamagui';
+import { Plus } from 'lucide-react-native';
+import { PressableScale } from './PressableScale';
+import { pressFeedback } from '../lib/haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRouter } from 'expo-router';
 import { useNotesStore } from '../store/notesStore';
+import { useThemeStore } from '../store/themeStore';
 import { NoteCard } from './NoteCard';
 import { EmptyState } from './EmptyState';
 import { SearchBar } from './SearchBar';
@@ -29,15 +33,19 @@ export function NoteListScreen({
 }) {
   const router = useRouter();
   const navigation = useNavigation();
+  const theme = useTheme();
+  const systemScheme = useColorScheme();
+  const themeMode = useThemeStore((s) => s.themeMode);
+  const isLight = themeMode === 'system' ? systemScheme !== 'dark' : themeMode === 'light';
   const repo = useNotesStore((s) => s.repo);
-  const trash = useNotesStore((s) => s.trash);
-  const allNotes = useNotesStore((s) => s.allNotes);
-  const archived = useNotesStore((s) => s.archived);
+  // Count-only selectors: re-render when the counts change, not on every
+  // Firestore snapshot that swaps array identity while lengths stay the same.
+  const trashCount = useNotesStore((s) => s.trash.length);
+  const totalCount = useNotesStore((s) => s.allNotes.length + s.archived.length + s.trash.length);
 
   const selection = useSelectionMode();
   const search = useSearchBar(notes);
-  const totalCount = allNotes.length + archived.length + trash.length;
-  const globalOverflowItems = useGlobalOverflowItems(repo, trash.length, search.open, totalCount);
+  const globalOverflowItems = useGlobalOverflowItems(repo, trashCount, search.open, totalCount);
   const contentLocked = useDrawerCloseGuard();
 
   useLayoutEffect(() => {
@@ -68,6 +76,7 @@ export function NoteListScreen({
   }, [navigation, selection.isSelecting, selection.selectedIds, repo, notes, globalOverflowItems]);
 
   function handleCreate() {
+    pressFeedback();
     router.push('/note/new');
   }
 
@@ -105,23 +114,23 @@ export function NoteListScreen({
         )}
 
         {showFab && !search.visible && !selection.isSelecting ? (
-          <Pressable onPress={handleCreate} style={styles.fabPressable}>
+          <PressableScale onPress={handleCreate} scaleTo={0.9} style={styles.fabPressable}>
             <YStack
               width={56}
               height={56}
               borderRadius={28}
-              backgroundColor="$color2"
-              borderWidth={1}
-              borderColor="$color4"
+              backgroundColor={isLight ? '#fff' : theme.color12.val}
               justifyContent="center"
               alignItems="center"
-              elevation={6}
+              elevation={4}
+              shadowColor="#000"
+              shadowOffset={{ width: 0, height: 2 }}
+              shadowOpacity={0.2}
+              shadowRadius={4}
             >
-              <Text fontSize={30} fontWeight="300" color="$color12" lineHeight={32}>
-                +
-              </Text>
+              <Plus size={28} strokeWidth={2.5} color={isLight ? '#000' : theme.color1.val} />
             </YStack>
-          </Pressable>
+          </PressableScale>
         ) : null}
       </YStack>
     </SafeAreaView>
@@ -132,5 +141,5 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   list: { padding: 16, paddingBottom: 100 },
   separator: { height: 8 },
-  fabPressable: { position: 'absolute', bottom: 24, right: 24 },
+  fabPressable: { position: 'absolute', bottom: 48, right: 32 },
 });

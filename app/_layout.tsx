@@ -5,11 +5,13 @@ import { useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { getAuth, onAuthStateChanged, type User } from '@react-native-firebase/auth';
 import { ShareIntentProvider, useShareIntentContext } from 'expo-share-intent';
+import { StatusBar } from 'expo-status-bar';
 import { useNotesStore } from '../src/store/notesStore';
 import { createFirestoreRepo } from '../src/data/firestoreNotesRepo';
 import { useNotesWatcher } from '../src/hooks/useNotesWatcher';
 import { useThemeStore } from '../src/store/themeStore';
-import tamaguiConfig, { screenBackground } from '../tamagui.config';
+import { ThemedAlert } from '../src/components/ThemedAlert';
+import tamaguiConfig, { screenBackground, primaryText } from '../tamagui.config';
 
 export default function RootLayout() {
   return (
@@ -27,17 +29,23 @@ function RootLayoutNav() {
   const setRepo = useNotesStore((s) => s.setRepo);
   const router = useRouter();
   const segments = useSegments();
-  const { hasShareIntent, shareIntent, resetShareIntent } = useShareIntentContext();
+  const { isReady: shareIntentReady, hasShareIntent, shareIntent, resetShareIntent } = useShareIntentContext();
   useNotesWatcher();
 
   useEffect(() => { loadThemeMode(); }, [loadThemeMode]);
 
   // Open a fresh note editor pre-filled with text shared in from another app.
+  // Uses push (not replace) so the notes list stays underneath in history —
+  // that's what makes React Navigation render a normal back button in the
+  // header, so back returns to the notes list.
   useEffect(() => {
-    if (!user || !hasShareIntent || !shareIntent.text) return;
-    router.push({ pathname: '/note/[id]', params: { id: 'new', sharedText: shareIntent.text } });
+    if (!user || !shareIntentReady || !hasShareIntent || !shareIntent.text) return;
+    router.push({
+      pathname: '/note/[id]',
+      params: { id: 'new', sharedText: shareIntent.text },
+    });
     resetShareIntent();
-  }, [user, hasShareIntent, shareIntent, resetShareIntent, router]);
+  }, [user, shareIntentReady, hasShareIntent, shareIntent, resetShareIntent, router]);
 
   const effectiveScheme: 'light' | 'dark' =
     themeMode === 'system' ? (systemScheme === 'dark' ? 'dark' : 'light') : themeMode;
@@ -63,14 +71,16 @@ function RootLayoutNav() {
     }
   }, [user, segments]);
 
-  // Render nothing while Firebase resolves the initial auth state to avoid
-  // flashing the wrong screen before the redirect fires.
-  if (user === undefined || !themeLoaded) return null;
+  // Render nothing while Firebase resolves the initial auth state, or while
+  // the share-intent module hasn't resolved yet — otherwise the notes list
+  // would mount and paint for a frame before the share-intent redirect fires.
+  if (user === undefined || !themeLoaded || !shareIntentReady) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <TamaguiProvider config={tamaguiConfig} defaultTheme={effectiveScheme}>
         <Theme name={effectiveScheme}>
+          <StatusBar style={effectiveScheme === 'dark' ? 'light' : 'dark'} />
           <Stack
             screenOptions={{
               headerShown: false,
@@ -85,9 +95,13 @@ function RootLayoutNav() {
                 headerShown: true,
                 title: 'My Notes',
                 headerStyle: { backgroundColor: screenBackground[effectiveScheme] },
+                headerTintColor: primaryText[effectiveScheme],
+                headerTitleStyle: { fontWeight: '700' },
+                headerShadowVisible: false,
               }}
             />
           </Stack>
+          <ThemedAlert />
         </Theme>
       </TamaguiProvider>
     </GestureHandlerRootView>

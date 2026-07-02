@@ -1,5 +1,4 @@
 import { useCallback, useMemo } from 'react';
-import { Alert } from 'react-native';
 import { Search, Trash2, ArchiveRestore, Upload, Download, XCircle } from 'lucide-react-native';
 import type { NotesRepository } from '../data/NotesRepository';
 import { exportNotes, pickAndImportNotes } from '../lib/exportImport';
@@ -8,6 +7,8 @@ import {
   confirmRestoreAllTrash,
   confirmDeleteEverything,
 } from '../lib/globalOverflowActions';
+import { showAlert } from '../lib/alert';
+import { successFeedback } from '../lib/haptics';
 import type { OverflowItem } from '../components/OverflowMenu';
 
 export function useGlobalOverflowItems(
@@ -22,9 +23,10 @@ export function useGlobalOverflowItems(
       const notes = await pickAndImportNotes();
       if (notes.length === 0) return;
       await repo.importNotes(notes);
-      Alert.alert('Import complete', `${notes.length} note${notes.length === 1 ? '' : 's'} merged.`);
+      successFeedback();
+      showAlert('Import complete', `${notes.length} note${notes.length === 1 ? '' : 's'} merged.`);
     } catch (e) {
-      Alert.alert('Import failed', (e as Error).message);
+      showAlert('Import failed', (e as Error).message);
     }
   }, [repo]);
 
@@ -34,7 +36,7 @@ export function useGlobalOverflowItems(
       const notes = await repo.exportNotes();
       await exportNotes(notes);
     } catch (e) {
-      Alert.alert('Export failed', (e as Error).message);
+      showAlert('Export failed', (e as Error).message);
     }
   }, [repo]);
 

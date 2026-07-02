@@ -1,7 +1,9 @@
 import { useCallback, useLayoutEffect } from 'react';
-import { StyleSheet, View, Pressable } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { YStack, XStack, Text, Button } from 'tamagui';
+import { PressableScale } from '../../src/components/PressableScale';
+import { longPressFeedback, tapFeedback } from '../../src/lib/haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRouter } from 'expo-router';
 import { useNotesStore } from '../../src/store/notesStore';
@@ -35,9 +37,19 @@ function TrashCard({
   onToggleSelect: () => void;
 }) {
   return (
-    <Pressable
-      onLongPress={onLongPress}
-      onPress={() => (selectionMode ? onToggleSelect() : onOpen(note.id))}
+    <PressableScale
+      onLongPress={() => {
+        longPressFeedback();
+        onLongPress();
+      }}
+      onPress={() => {
+        if (selectionMode) {
+          tapFeedback();
+          onToggleSelect();
+        } else {
+          onOpen(note.id);
+        }
+      }}
     >
       <YStack
         backgroundColor={selected ? '$color3' : '$color2'}
@@ -56,7 +68,7 @@ function TrashCard({
           </Text>
         </XStack>
       </YStack>
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -65,13 +77,13 @@ export default function TrashScreen() {
   const router = useRouter();
   const repo = useNotesStore((s) => s.repo);
   const trash = useNotesStore((s) => s.trash);
-  const allNotes = useNotesStore((s) => s.allNotes);
-  const archived = useNotesStore((s) => s.archived);
+  // allNotes/archived are only needed for the total count here — subscribe to the
+  // number, not the arrays, so unrelated edits don't re-render the Trash screen.
+  const totalCount = useNotesStore((s) => s.allNotes.length + s.archived.length + s.trash.length);
 
   const selection = useSelectionMode();
   const search = useSearchBar(trash);
   const contentLocked = useDrawerCloseGuard();
-  const totalCount = allNotes.length + archived.length + trash.length;
   const globalOverflowItems = useGlobalOverflowItems(repo, trash.length, search.open, totalCount);
 
   useLayoutEffect(() => {

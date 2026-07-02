@@ -1,6 +1,7 @@
 import { StyleSheet, TextInput, Pressable } from 'react-native';
 import { XStack, useTheme } from 'tamagui';
 import { Search, X } from 'lucide-react-native';
+import { ICON, ICON_STROKE } from '../lib/icons';
 
 export function SearchBar({
   value,
@@ -25,7 +26,7 @@ export function SearchBar({
       alignItems="center"
       gap="$2"
     >
-      <Search size={16} color={theme.color9.val} />
+      <Search size={ICON.sm} strokeWidth={ICON_STROKE} color={theme.color9.val} />
       <TextInput
         style={[styles.input, { color: theme.color12.val }]}
         placeholder="Search notes…"
@@ -36,7 +37,7 @@ export function SearchBar({
         returnKeyType="search"
       />
       <Pressable onPress={onClose} hitSlop={8}>
-        <X size={18} color={theme.color9.val} />
+        <X size={ICON.sm} strokeWidth={ICON_STROKE} color={theme.color9.val} />
       </Pressable>
     </XStack>
   );

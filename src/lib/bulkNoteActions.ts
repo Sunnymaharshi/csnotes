@@ -4,17 +4,29 @@ import type { Note } from '../types/Note';
 import type { NotesRepository } from '../data/NotesRepository';
 import type { OverflowItem } from '../components/OverflowMenu';
 import { confirmDeleteForever } from './globalOverflowActions';
+import { showToast, noteCount } from './toast';
+import { successFeedback, warningFeedback } from './haptics';
+
+// Bulk actions confirm with one signal each: a toast (selection clears, so the
+// on-screen change isn't self-explanatory) plus a haptic — warning for
+// destructive ops, success otherwise. No-ops (0 targets) stay silent.
 
 export async function bulkDelete(repo: NotesRepository, notes: Note[]) {
   const targets = notes.filter((n) => n.deletedAt == null);
+  if (targets.length === 0) return;
   await Promise.all(targets.map((n) => repo.trashNote(n.id)));
+  warningFeedback();
+  showToast(`${noteCount(targets.length)} moved to trash`);
 }
 
 // Used when the selected notes are already in the trash — deleting them again
 // should be permanent, not just re-trash a no-op.
 export async function bulkDeleteForever(repo: NotesRepository, notes: Note[]) {
   const targets = notes.filter((n) => n.deletedAt != null);
+  if (targets.length === 0) return;
   await Promise.all(targets.map((n) => repo.deleteNote(n.id)));
+  warningFeedback();
+  showToast(`${noteCount(targets.length)} deleted`);
 }
 
 // Favouriting/archiving is the last action the user took, so it always wins:
@@ -23,31 +35,46 @@ export async function bulkDeleteForever(repo: NotesRepository, notes: Note[]) {
 // change anything.
 export async function bulkFavourite(repo: NotesRepository, notes: Note[]) {
   const targets = notes.filter((n) => !n.isFavourite);
+  if (targets.length === 0) return;
   await Promise.all(
     targets.map((n) => repo.updateNote(n.id, { isFavourite: true, isArchived: false, deletedAt: null })),
   );
+  successFeedback();
+  showToast(`${noteCount(targets.length)} favourited`);
 }
 
 export async function bulkUnfavourite(repo: NotesRepository, notes: Note[]) {
   const targets = notes.filter((n) => n.isFavourite);
+  if (targets.length === 0) return;
   await Promise.all(targets.map((n) => repo.updateNote(n.id, { isFavourite: false })));
+  successFeedback();
+  showToast(`${noteCount(targets.length)} unfavourited`);
 }
 
 export async function bulkArchive(repo: NotesRepository, notes: Note[]) {
   const targets = notes.filter((n) => !n.isArchived);
+  if (targets.length === 0) return;
   await Promise.all(
     targets.map((n) => repo.updateNote(n.id, { isArchived: true, isFavourite: false, deletedAt: null })),
   );
+  successFeedback();
+  showToast(`${noteCount(targets.length)} archived`);
 }
 
 export async function bulkUnarchive(repo: NotesRepository, notes: Note[]) {
   const targets = notes.filter((n) => n.isArchived);
+  if (targets.length === 0) return;
   await Promise.all(targets.map((n) => repo.updateNote(n.id, { isArchived: false })));
+  successFeedback();
+  showToast(`${noteCount(targets.length)} unarchived`);
 }
 
 export async function bulkRestore(repo: NotesRepository, notes: Note[]) {
   const targets = notes.filter((n) => n.deletedAt != null);
+  if (targets.length === 0) return;
   await Promise.all(targets.map((n) => repo.restoreNote(n.id)));
+  successFeedback();
+  showToast(`${noteCount(targets.length)} restored`);
 }
 
 export async function bulkShare(notes: Note[]) {

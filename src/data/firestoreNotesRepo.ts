@@ -1,10 +1,36 @@
-import firestore from '@react-native-firebase/firestore';
+import {
+  getFirestore,
+  collection,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  getDocs,
+  onSnapshot,
+  query,
+  where,
+  orderBy,
+  writeBatch,
+} from '@react-native-firebase/firestore';
 import type { Note } from '../types/Note';
 import type { NotesRepository } from './NotesRepository';
 import { randomUUID } from '../lib/uuid';
 
+const db = getFirestore();
+
 function notesCol(uid: string) {
-  return firestore().collection('users').doc(uid).collection('notes');
+  return collection(doc(collection(db, 'users'), uid), 'notes');
+}
+
+const BATCH_LIMIT = 500;
+
+async function commitInChunks<T>(items: T[], apply: (batch: ReturnType<typeof writeBatch>, item: T) => void) {
+  for (let i = 0; i < items.length; i += BATCH_LIMIT) {
+    const batch = writeBatch(db);
+    items.slice(i, i + BATCH_LIMIT).forEach((item) => apply(batch, item));
+    await batch.commit();
+  }
 }
 
 function toNote(data: Record<string, unknown>, id: string): Note {
@@ -24,38 +50,42 @@ export function createFirestoreRepo(uid: string): NotesRepository {
 
   return {
     watchAllNotes(cb) {
-      return col
-        .where('deletedAt', '==', null)
-        .where('isArchived', '==', false)
-        .orderBy('updatedAt', 'desc')
-        .onSnapshot((snap) => cb(snap.docs.map((d) => toNote(d.data(), d.id))));
+      const q = query(
+        col,
+        where('deletedAt', '==', null),
+        where('isArchived', '==', false),
+        orderBy('updatedAt', 'desc'),
+      );
+      return onSnapshot(q, (snap) => cb(snap.docs.map((d) => toNote(d.data(), d.id))));
     },
 
     watchFavourites(cb) {
-      return col
-        .where('deletedAt', '==', null)
-        .where('isFavourite', '==', true)
-        .orderBy('updatedAt', 'desc')
-        .onSnapshot((snap) => cb(snap.docs.map((d) => toNote(d.data(), d.id))));
+      const q = query(
+        col,
+        where('deletedAt', '==', null),
+        where('isFavourite', '==', true),
+        orderBy('updatedAt', 'desc'),
+      );
+      return onSnapshot(q, (snap) => cb(snap.docs.map((d) => toNote(d.data(), d.id))));
     },
 
     watchArchived(cb) {
-      return col
-        .where('deletedAt', '==', null)
-        .where('isArchived', '==', true)
-        .orderBy('updatedAt', 'desc')
-        .onSnapshot((snap) => cb(snap.docs.map((d) => toNote(d.data(), d.id))));
+      const q = query(
+        col,
+        where('deletedAt', '==', null),
+        where('isArchived', '==', true),
+        orderBy('updatedAt', 'desc'),
+      );
+      return onSnapshot(q, (snap) => cb(snap.docs.map((d) => toNote(d.data(), d.id))));
     },
 
     watchTrash(cb) {
-      return col
-        .where('deletedAt', '!=', null)
-        .orderBy('deletedAt', 'desc')
-        .onSnapshot((snap) => cb(snap.docs.map((d) => toNote(d.data(), d.id))));
+      const q = query(col, where('deletedAt', '!=', null), orderBy('deletedAt', 'desc'));
+      return onSnapshot(q, (snap) => cb(snap.docs.map((d) => toNote(d.data(), d.id))));
     },
 
     async getNote(id) {
-      const snap = await col.doc(id).get();
+      const snap = await getDoc(doc(col, id));
       return snap.exists() ? toNote(snap.data() as Record<string, unknown>, snap.id) : null;
     },
 
@@ -63,20 +93,20 @@ export function createFirestoreRepo(uid: string): NotesRepository {
       const id = requestedId ?? randomUUID();
       const now = Date.now();
       const note: Note = { ...data, id, createdAt: now, updatedAt: now };
-      await col.doc(id).set(note);
+      await setDoc(doc(col, id), note);
       return note;
     },
 
     async updateNote(id, data) {
-      await col.doc(id).update({ ...data, updatedAt: Date.now() });
+      await updateDoc(doc(col, id), { ...data, updatedAt: Date.now() });
     },
 
     async deleteNote(id) {
-      await col.doc(id).delete();
+      await deleteDoc(doc(col, id));
     },
 
     async trashNote(id) {
-      await col.doc(id).update({
+      await updateDoc(doc(col, id), {
         deletedAt: Date.now(),
         isFavourite: false,
         isArchived: false,
@@ -85,38 +115,32 @@ export function createFirestoreRepo(uid: string): NotesRepository {
     },
 
     async restoreNote(id) {
-      await col.doc(id).update({ deletedAt: null, updatedAt: Date.now() });
+      await updateDoc(doc(col, id), { deletedAt: null, updatedAt: Date.now() });
     },
 
     async emptyTrash() {
-      const snap = await col.where('deletedAt', '!=', null).get();
-      const batch = firestore().batch();
-      snap.docs.forEach((d) => batch.delete(d.ref));
-      await batch.commit();
+      const snap = await getDocs(query(col, where('deletedAt', '!=', null)));
+      await commitInChunks(snap.docs, (batch, d) => batch.delete(d.ref));
     },
 
     async restoreAllTrash() {
-      const snap = await col.where('deletedAt', '!=', null).get();
-      const batch = firestore().batch();
-      snap.docs.forEach((d) => batch.update(d.ref, { deletedAt: null, updatedAt: Date.now() }));
-      await batch.commit();
+      const snap = await getDocs(query(col, where('deletedAt', '!=', null)));
+      await commitInChunks(snap.docs, (batch, d) =>
+        batch.update(d.ref, { deletedAt: null, updatedAt: Date.now() }),
+      );
     },
 
     async deleteEverything() {
-      const snap = await col.get();
-      const batch = firestore().batch();
-      snap.docs.forEach((d) => batch.delete(d.ref));
-      await batch.commit();
+      const snap = await getDocs(col);
+      await commitInChunks(snap.docs, (batch, d) => batch.delete(d.ref));
     },
 
     async importNotes(notes) {
-      const batch = firestore().batch();
-      notes.forEach((note) => batch.set(col.doc(note.id), note));
-      await batch.commit();
+      await commitInChunks(notes, (batch, note) => batch.set(doc(col, note.id), note));
     },
 
     async exportNotes() {
-      const snap = await col.get();
+      const snap = await getDocs(col);
       return snap.docs.map((d) => toNote(d.data() as Record<string, unknown>, d.id));
     },
   };

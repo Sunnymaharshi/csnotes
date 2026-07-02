@@ -1,18 +1,18 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { Note } from '../types/Note';
 
 export function useSearchBar(notes: Note[]) {
   const [visible, setVisible] = useState(false);
   const [query, setQuery] = useState('');
 
-  function open() {
-    setVisible(true);
-  }
+  // Stable identities so consumers (e.g. useGlobalOverflowItems' useMemo and the
+  // header setOptions effect) don't rebuild on every render.
+  const open = useCallback(() => setVisible(true), []);
 
-  function close() {
+  const close = useCallback(() => {
     setVisible(false);
     setQuery('');
-  }
+  }, []);
 
   const displayedNotes = useMemo(() => {
     if (!query.trim()) return notes;

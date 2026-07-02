@@ -14,7 +14,8 @@ data model, and migration.
 - **Own the data** — JSON export/import as backup + anti-lock-in.
 
 **Kept from the old app:** normal notes, favourites, archived, trash, share-into-app.
-**Dropped on purpose:** categories (Home/Work/…), reminders, pinned notes, iOS, web.
+**Dropped on purpose:** categories (Home/Work/…), reminders, iOS, web.
+**Now planned (post-v1):** pin-to-top, auto-linkified note text, sort options — see §10.
 
 > A future standalone web app can connect to the same Firebase project with zero backend changes.
 
@@ -29,7 +30,7 @@ data model, and migration.
 - **Favourite** and **Archive** flags are independent in the schema, but the editor/bulk-action
   UI still enforces mutual exclusivity (setting one clears the other) — matches old-app
   behavior for now; revisit if simultaneous favourite+archive is ever wanted.
-- **Trash**: soft-delete with Undo toast → Trash view (Restore / Empty trash).
+- **Trash**: soft-delete (no undo) → Trash view (Restore / Empty trash).
 - **Search** note text — per-view (searches only the currently open list, not global).
 - **Share out** a note; **share text in** from other apps opens a new note pre-filled with
   the shared text, following the same save-on-back / discard-on-close rules as any new note
@@ -55,7 +56,8 @@ data model, and migration.
 | State | Zustand |
 | Backend | Firebase Firestore + Auth (`@react-native-firebase`) |
 | Auth | `@react-native-google-signin/google-signin` |
-| Icons | lucide-react-native |
+| Icons | lucide-react-native (conventions in `src/lib/icons.ts`) |
+| Feedback | `expo-haptics` (via `src/lib/haptics.ts`) + Android toasts (`src/lib/toast.ts`) |
 | Export/Import | `expo-file-system` + `expo-sharing` / `expo-document-picker` |
 | Share-in | `expo-share-intent` (Android `ACTION_SEND`, `text/*` only) |
 
@@ -108,6 +110,8 @@ interface Note {
   text: string;             // single content field (no separate title)
   isFavourite: boolean;     // independent flag
   isArchived: boolean;      // independent flag
+  isPinned?: boolean;       // §8.1 — pinned notes sort above the rest (independent flag)
+  sortOrder?: number;       // §8.3 — manual-sort position; unset until user reorders
   deletedAt: number | null; // non-null = in Trash
   createdAt: number;        // epoch millis
   updatedAt: number;        // epoch millis
@@ -166,7 +170,38 @@ Import to load `scripts/notes-export.json`.
 
 ---
 
-## 8. Repo Structure
+## 8. Planned Enhancements (approved, post-v1)
+
+Three additions that fit the existing single-`text`-field model without a backend or new
+services. Explicitly **out of scope**: undo, reminders, quick-capture/widgets, labels/tags,
+per-note colors, and AI features (all considered and declined).
+
+### 8.1 Pin to top
+Distinct from Favourite (which is a *collection/filter*): a pin keeps a note physically at the
+top of a list. Adds `isPinned` (independent of `isFavourite`/`isArchived` — no mutual
+exclusivity). Pinned notes render in a group above the rest in **All Notes** (and other
+non-trash views); ties fall back to the active sort (§8.3). UI: toggle in the editor overflow
++ bulk action; a small pin glyph on `NoteCard`. Confirms per the feedback rules — toast (state
+change isn't self-evident from the icon alone). Reverses the old "pinned dropped" decision
+(§1); old-app `state==10` was unused so there's nothing to migrate.
+
+### 8.2 Auto-linkified note text
+Since a note is raw text, detect URLs, emails, and phone numbers in the rendered body and make
+them tappable (open browser / mail / dialer). **No schema change** — pure render-layer. Applies
+to `NoteCard` previews and the editor's read state; must not interfere with text selection or
+the tap-to-edit gesture. Keep the detector centralized in `src/lib/` so both surfaces share it.
+
+### 8.3 Sort options
+Expose list ordering: **Modified** (default, current behavior), **Created**, and **Manual**
+(drag-to-reorder). Manual persists via `sortOrder`; unset until the user first reorders, then
+falls back to modified order. Pinned group (§8.1) always sorts above, with the chosen order
+applied within each group. Selection lives in the global overflow menu; persist the choice
+locally (per-view is out of scope — one global sort). FlashList v2 supports the reorder gesture
+via `react-native-reanimated`/gesture-handler already in the stack.
+
+---
+
+## 9. Repo Structure
 
 ```
 app/
@@ -174,18 +209,20 @@ app/
   sign-in.tsx            Google Sign-In (full screen)
   note/[id].tsx          editor (single text area, bottom action bar; id='new' for creation)
   (drawer)/
-    _layout.tsx          Drawer (moon logo → CS Notes / Favourites / Archived / Trash / Settings)
+    _layout.tsx          Drawer (moon logo → CS Notes / Favourites / Archived / Trash;
+                         appearance/backup/sign-out controls inline in drawer content)
     index.tsx  favourites.tsx  archived.tsx  trash.tsx
-    settings.tsx
 src/
   components/            NoteCard, EmptyState, HeaderStar, NoteListScreen, OverflowMenu,
-                          SearchBar, SelectionHeader
+                          SearchBar, SelectionHeader, PressableScale (standard tappable:
+                          press-scale + optional haptic)
   data/                  NotesRepository, firebase, firestoreNotesRepo
   store/                 notesStore, themeStore
   hooks/                 useNotesWatcher, useSearchBar, useSelectionMode,
                           useGlobalOverflowItems, useDrawerCloseGuard
   lib/                   exportImport, globalOverflowActions, bulkNoteActions, googleAuth,
-                          compactDate, relativeTime, uuid
+                          compactDate, relativeTime, uuid, icons (size/stroke consts),
+                          haptics (restrained feedback wrappers), toast (single showToast)
   types/                 Note
 scripts/                 migrate.ts (old SQLite → notes-export.json, see §7)
 tamagui.config.ts        monochrome light/dark themes
@@ -194,13 +231,16 @@ firestore.rules / firestore.indexes.json
 
 ---
 
-## 9. Status
+## 10. Status
 
 **Done:** scaffold, data layer + Security Rules, auth, notes list + editor, favourite/archive,
-trash + undo, per-view search, selection mode + bulk actions, share out, share-in
+trash, per-view search, selection mode + bulk actions, share out, share-in
 (`expo-share-intent`), dark mode, export/import, old-app-style redesign (monochrome theme,
 left drawer, bottom action bar), offline-first via `@react-native-firebase`, dependency
-versions aligned to Expo SDK 57 (`expo-doctor` 20/20), migration script (§7).
+versions aligned to Expo SDK 57 (`expo-doctor` 20/20), migration script (§7). UI/UX polish:
+themed status bar + header tint, consistent icon system, `PressableScale` press feedback,
+`expo-haptics` (restrained) + consistent per-mutation toasts, store re-render optimizations
+(numeric selectors, stabilized hook callbacks).
 
 **Remaining:** ship (EAS Build for Android + EAS Update OTA).
 

@@ -1,38 +1,55 @@
-import { Alert, ToastAndroid } from 'react-native';
 import type { NotesRepository } from '../data/NotesRepository';
+import { showToast, noteCount } from './toast';
+import { showAlert } from './alert';
+import { successFeedback, warningFeedback } from './haptics';
 
 export function confirmEmptyTrash(repo: NotesRepository, trashCount: number) {
   if (trashCount === 0) {
-    ToastAndroid.show('Trash is already empty', ToastAndroid.SHORT);
+    showToast('Trash is already empty');
     return;
   }
-  Alert.alert(
+  showAlert(
     'Empty Trash',
-    `Permanently delete ${trashCount} note${trashCount === 1 ? '' : 's'}? This cannot be undone.`,
+    `Permanently delete ${noteCount(trashCount)}? This cannot be undone.`,
     [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete All', style: 'destructive', onPress: () => repo.emptyTrash() },
+      {
+        text: 'Delete All',
+        style: 'destructive',
+        onPress: async () => {
+          await repo.emptyTrash();
+          warningFeedback();
+          showToast('Trash emptied');
+        },
+      },
     ],
   );
 }
 
 export function confirmRestoreAllTrash(repo: NotesRepository, trashCount: number) {
   if (trashCount === 0) {
-    ToastAndroid.show('Trash is empty', ToastAndroid.SHORT);
+    showToast('Trash is empty');
     return;
   }
-  Alert.alert(
+  showAlert(
     'Restore from Trash',
-    `Restore ${trashCount} note${trashCount === 1 ? '' : 's'} from trash?`,
+    `Restore ${noteCount(trashCount)} from trash?`,
     [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Restore', onPress: () => repo.restoreAllTrash() },
+      {
+        text: 'Restore',
+        onPress: async () => {
+          await repo.restoreAllTrash();
+          successFeedback();
+          showToast(`${noteCount(trashCount)} restored`);
+        },
+      },
     ],
   );
 }
 
 export function confirmDeleteNoteForever(onConfirm: () => void) {
-  Alert.alert(
+  showAlert(
     'Delete Forever',
     'Permanently delete this note? This cannot be undone.',
     [
@@ -43,7 +60,7 @@ export function confirmDeleteNoteForever(onConfirm: () => void) {
 }
 
 export function confirmDeleteForever(count: number, onConfirm: () => void) {
-  Alert.alert(
+  showAlert(
     'Delete Forever',
     `Permanently delete ${count} note${count === 1 ? '' : 's'}? This cannot be undone.`,
     [
@@ -55,15 +72,23 @@ export function confirmDeleteForever(count: number, onConfirm: () => void) {
 
 export function confirmDeleteEverything(repo: NotesRepository, totalCount: number) {
   if (totalCount === 0) {
-    ToastAndroid.show('There are no notes to delete', ToastAndroid.SHORT);
+    showToast('There are no notes to delete');
     return;
   }
-  Alert.alert(
+  showAlert(
     'Delete Everything',
     'Permanently delete ALL notes, including favourites, archived, and trash? This cannot be undone.',
     [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete Everything', style: 'destructive', onPress: () => repo.deleteEverything() },
+      {
+        text: 'Delete Everything',
+        style: 'destructive',
+        onPress: async () => {
+          await repo.deleteEverything();
+          warningFeedback();
+          showToast('All notes deleted');
+        },
+      },
     ],
   );
 }

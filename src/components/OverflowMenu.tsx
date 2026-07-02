@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Modal, Pressable } from 'react-native';
 import { YStack, XStack, Text, useTheme } from 'tamagui';
 import { MoreVertical, type LucideIcon } from 'lucide-react-native';
+import { ICON, ICON_STROKE } from '../lib/icons';
 
 export interface OverflowItem {
   label: string;
@@ -20,7 +21,7 @@ export function OverflowMenu({ items }: { items: OverflowItem[] }) {
         hitSlop={8}
         style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, paddingHorizontal: 8 })}
       >
-        <MoreVertical size={22} color={theme.color12.val} />
+        <MoreVertical size={ICON.md} strokeWidth={ICON_STROKE} color={theme.color12.val} />
       </Pressable>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
@@ -47,7 +48,7 @@ export function OverflowMenu({ items }: { items: OverflowItem[] }) {
                 style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
               >
                 <XStack alignItems="center" gap="$3" paddingVertical="$3" paddingHorizontal="$4">
-                  <Icon size={20} color={theme.color12.val} />
+                  <Icon size={ICON.sm} strokeWidth={ICON_STROKE} color={theme.color12.val} />
                   <Text fontSize="$4" color="$color12">
                     {label}
                   </Text>

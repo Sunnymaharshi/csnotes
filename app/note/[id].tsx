@@ -6,29 +6,27 @@ import {
   Platform,
   Share,
   Pressable,
-  ToastAndroid,
   Keyboard,
 } from 'react-native';
 import { YStack, XStack, Text, useTheme } from 'tamagui';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { Star, Archive, ArchiveRestore, Check, Share2, Trash2 } from 'lucide-react-native';
+import { ICON, ICON_STROKE } from '../../src/lib/icons';
 import { useNotesStore } from '../../src/store/notesStore';
 import { fullDateTime } from '../../src/lib/compactDate';
 import { confirmDeleteNoteForever } from '../../src/lib/globalOverflowActions';
 import { randomUUID } from '../../src/lib/uuid';
+import { showToast } from '../../src/lib/toast';
+import { tapFeedback, successFeedback, warningFeedback } from '../../src/lib/haptics';
 import type { NotesRepository } from '../../src/data/NotesRepository';
-
-function showToast(message: string) {
-  ToastAndroid.show(message, ToastAndroid.SHORT);
-}
 
 function NoteHeaderRight({
   targetId,
   onDone,
 }: {
   targetId: string | null;
-  onDone: () => void;
+  onDone: (opts?: { silent?: boolean }) => void;
 }) {
   const theme = useTheme();
   const repo = useNotesStore((s) => s.repo) as NotesRepository;
@@ -52,33 +50,40 @@ function NoteHeaderRight({
       isFavourite: isArchived ? note.isFavourite : false,
       deletedAt: null,
     });
-    onDone();
+    tapFeedback();
+    showToast(isArchived ? 'Unarchived' : 'Archived');
+    // Flush any pending text edits, but silently — 'Archived' is already the
+    // one toast this action should produce, so don't also surface "No new
+    // changes" for the common case of archiving without editing.
+    onDone({ silent: true });
   }
 
   return (
     <XStack alignItems="center" gap="$1" paddingRight="$2">
       <Pressable onPress={handleArchive} hitSlop={8} style={styles.headerBtn}>
         {isArchived ? (
-          <ArchiveRestore size={22} color={iconColor} />
+          <ArchiveRestore size={ICON.md} strokeWidth={ICON_STROKE} color={iconColor} />
         ) : (
-          <Archive size={22} color={iconColor} />
+          <Archive size={ICON.md} strokeWidth={ICON_STROKE} color={iconColor} />
         )}
       </Pressable>
-      <Pressable onPress={onDone} hitSlop={8} style={styles.headerBtn}>
-        <Check size={24} color={iconColor} />
+      <Pressable onPress={() => onDone()} hitSlop={8} style={styles.headerBtn}>
+        <Check size={ICON.lg} strokeWidth={ICON_STROKE} color={iconColor} />
       </Pressable>
     </XStack>
   );
 }
 
 export default function NoteScreen() {
-  const { id, sharedText } = useLocalSearchParams<{ id: string; sharedText?: string }>();
+  const { id, sharedText } = useLocalSearchParams<{
+    id: string;
+    sharedText?: string;
+  }>();
   const isNew = id === 'new';
   const router = useRouter();
   const navigation = useNavigation();
   const theme = useTheme();
   const repo = useNotesStore((s) => s.repo);
-  const setTrashUndo = useNotesStore((s) => s.setTrashUndo);
 
   const [savedId, setSavedId] = useState<string | null>(null);
   const targetId = isNew ? savedId : id;
@@ -137,6 +142,12 @@ export default function NoteScreen() {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     }
+    // Claimed synchronously (before any await) so a second save triggered while
+    // this one is still in flight — e.g. beforeRemove kicking off the save and
+    // then dispatching navigation, which unmounts the screen and runs the
+    // unmount-flush effect before this await resolves — sees nothing pending
+    // and doesn't fire a duplicate save/toast.
+    pendingSave.current = false;
     if (isNew && !createdIdRef.current) {
       if (!content.trim()) return;
       const newId = randomUUID();
@@ -149,14 +160,15 @@ export default function NoteScreen() {
         isArchived: false,
         deletedAt: null,
       });
+      successFeedback();
       showToast('Saved');
     } else {
       const targetId = isNew ? createdIdRef.current : id;
       if (!targetId) return;
       await repoRef.current.updateNote(targetId, { text: content });
+      successFeedback();
       showToast('Updated');
     }
-    pendingSave.current = false;
   });
 
   // No autosave while typing — a save only happens via the tick button,
@@ -167,15 +179,17 @@ export default function NoteScreen() {
   }
 
   // Called when user taps Check (tick) — saves in place, stays on screen.
-  async function handleDone() {
+  // `silent` is used when another action (e.g. archive) already toasted and
+  // just needs pending edits flushed, without an extra "No new changes" toast.
+  async function handleDone(opts?: { silent?: boolean }) {
     Keyboard.dismiss();
     const content = textRef.current.trim();
     if (isNew && !createdIdRef.current && !content) {
-      showToast('Note cannot be empty');
+      if (!opts?.silent) showToast('Note cannot be empty');
       return;
     }
     if (!pendingSave.current) {
-      showToast('No new changes');
+      if (!opts?.silent) showToast('No new changes');
       return;
     }
     saveNow.current();
@@ -234,11 +248,14 @@ export default function NoteScreen() {
   async function handleFavourite() {
     if (!targetId) { toastNotSaved(); return; }
     if (!repoRef.current || !note) return;
+    const nowFavourite = !note.isFavourite;
     await repoRef.current.updateNote(targetId, {
-      isFavourite: !note.isFavourite,
+      isFavourite: nowFavourite,
       isArchived: note.isFavourite ? note.isArchived : false,
       deletedAt: null,
     });
+    tapFeedback();
+    showToast(nowFavourite ? 'Added to favourites' : 'Removed from favourites');
   }
 
   async function handleShare() {
@@ -249,18 +266,24 @@ export default function NoteScreen() {
     if (!targetId) { toastNotSaved(); return; }
     if (!repoRef.current) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    // Any unsaved edits are moot once the note is trashed/deleted — clear the
+    // flag so beforeRemove's flush-on-back doesn't resurrect stale content
+    // into the doc after it's gone.
+    pendingSave.current = false;
     if (isTrashed) {
-      // Already in trash — this permanently deletes it, so confirm first and skip the undo toast.
+      // Already in trash — this permanently deletes it, so confirm first.
       confirmDeleteNoteForever(async () => {
         await repoRef.current!.deleteNote(targetId);
+        warningFeedback();
+        showToast('Deleted');
         router.back();
       });
       return;
     }
     (async () => {
       await repoRef.current!.trashNote(targetId);
-      const firstLine = textRef.current.split('\n')[0].trim();
-      setTrashUndo({ id: targetId, label: firstLine || 'Untitled' });
+      warningFeedback();
+      showToast('Moved to trash');
       router.back();
     })();
   }
@@ -298,10 +321,11 @@ export default function NoteScreen() {
           alignItems="center"
         >
           <BottomAction
-            label="favourite"
+            label="Favourite"
             icon={
               <Star
-                size={22}
+                size={ICON.md}
+                strokeWidth={ICON_STROKE}
                 color={isFavourite ? theme.color12.val : theme.color10.val}
                 fill={isFavourite ? theme.color12.val : 'none'}
               />
@@ -309,13 +333,13 @@ export default function NoteScreen() {
             onPress={handleFavourite}
           />
           <BottomAction
-            label="share"
-            icon={<Share2 size={22} color={theme.color10.val} />}
+            label="Share"
+            icon={<Share2 size={ICON.md} strokeWidth={ICON_STROKE} color={theme.color10.val} />}
             onPress={handleShare}
           />
           <BottomAction
-            label={isTrashed ? 'delete forever' : 'delete'}
-            icon={<Trash2 size={22} color={theme.color10.val} />}
+            label={isTrashed ? 'Delete forever' : 'Delete'}
+            icon={<Trash2 size={ICON.md} strokeWidth={ICON_STROKE} color={theme.color10.val} />}
             onPress={handleDelete}
           />
         </XStack>

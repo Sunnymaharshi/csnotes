@@ -60,6 +60,7 @@ const darkGray = {
 };
 
 export const screenBackground = { light: lightGray.color1, dark: darkGray.color1 };
+export const primaryText = { light: lightGray.color12, dark: darkGray.color12 };
 
 const themes = {
   ...config.themes,
