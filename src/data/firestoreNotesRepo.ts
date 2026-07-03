@@ -39,6 +39,7 @@ function toNote(data: Record<string, unknown>, id: string): Note {
     text: (data.text as string) ?? '',
     isFavourite: (data.isFavourite as boolean) ?? false,
     isArchived: (data.isArchived as boolean) ?? false,
+    isPinned: (data.isPinned as boolean) ?? false,
     deletedAt: (data.deletedAt as number | null) ?? null,
     createdAt: (data.createdAt as number) ?? Date.now(),
     updatedAt: (data.updatedAt as number) ?? Date.now(),
@@ -101,6 +102,11 @@ export function createFirestoreRepo(uid: string): NotesRepository {
       await updateDoc(doc(col, id), { ...data, updatedAt: Date.now() });
     },
 
+    async setPinned(id, isPinned) {
+      // No updatedAt bump — pin is metadata, so unpinning won't disturb the sort (§8.1).
+      await updateDoc(doc(col, id), { isPinned });
+    },
+
     async deleteNote(id) {
       await deleteDoc(doc(col, id));
     },
@@ -110,6 +116,7 @@ export function createFirestoreRepo(uid: string): NotesRepository {
         deletedAt: Date.now(),
         isFavourite: false,
         isArchived: false,
+        isPinned: false,
         updatedAt: Date.now(),
       });
     },

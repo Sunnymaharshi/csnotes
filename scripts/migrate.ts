@@ -82,16 +82,32 @@ for (let i = 0; i < resolved.length; i++) {
   i = gapEnd - 1;
 }
 
+// The old app rendered every list by `_id DESC` (insertion order); the stored time is the
+// last-edit time and is non-monotonic vs `_id`. `createdAt` drives the new app's default
+// Created-desc sort, so it MUST increase with `_id` to reproduce the old order. We can't just
+// use the real dates (they jump around) and clamping them forward collapses ranges whenever a
+// future-dated note sits early. Instead spread `createdAt` evenly across the real date span in
+// `_id` order: strictly increasing (order preserved) and varied/real-ish across 2021->2026.
+// `createdAt` is never displayed — only sorted on — so exact per-note accuracy is irrelevant.
+// `updatedAt` keeps the true edit date for display (the card shows it), so edited-out-of-order
+// notes end up with createdAt > updatedAt, which is fine and invisible.
+const realTimes = resolved.filter((t): t is number => t !== null);
+const minTs = Math.min(...realTimes);
+const maxTs = Math.max(...realTimes);
+const span = maxTs - minTs;
+const n = rows.length;
+
 const notes: Note[] = rows.map((r, idx) => {
-  const ts = resolved[idx]!;
+  const created = n === 1 ? minTs : Math.round(minTs + (span * idx) / (n - 1));
+  const edited = parseFullTimestamp(r.time); // true edit date, or null for the undated row
   return {
     id: randomUUID(),
     text: r.notes,
     isFavourite: r.state === 2,
     isArchived: r.state === 9,
     deletedAt: null,
-    createdAt: ts,
-    updatedAt: ts,
+    createdAt: created,
+    updatedAt: edited ?? created,
   };
 });
 

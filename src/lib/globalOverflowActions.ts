@@ -1,7 +1,7 @@
 import type { NotesRepository } from '../data/NotesRepository';
 import { showToast, noteCount } from './toast';
 import { showAlert } from './alert';
-import { successFeedback, warningFeedback } from './haptics';
+import { warningFeedback } from './haptics';
 
 export function confirmEmptyTrash(repo: NotesRepository, trashCount: number) {
   if (trashCount === 0) {
@@ -40,7 +40,6 @@ export function confirmRestoreAllTrash(repo: NotesRepository, trashCount: number
         text: 'Restore',
         onPress: async () => {
           await repo.restoreAllTrash();
-          successFeedback();
           showToast(`${noteCount(trashCount)} restored`);
         },
       },

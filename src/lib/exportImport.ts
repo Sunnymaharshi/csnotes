@@ -6,7 +6,11 @@ import type { Note } from '../types/Note';
 
 export async function exportNotes(notes: Note[]): Promise<void> {
   const json = JSON.stringify(notes, null, 2);
-  const filename = `csnotes-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  // Local date + time, colon-free for filesystem safety: csnotes-backup-2026-07-03_14-30.json
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  const stamp = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}`;
+  const filename = `csnotes-backup-${stamp}.json`;
   const file = new File(Paths.cache, filename);
   file.write(json);
   await Sharing.shareAsync(file.uri, { mimeType: 'application/json', dialogTitle: 'Save backup' });

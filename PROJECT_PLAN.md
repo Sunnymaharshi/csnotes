@@ -156,34 +156,58 @@ the app's Import feature already accepts (reuses the export/import path; no admi
 credentials). Run with `node scripts/migrate.ts [path/to/Notes.db]`, then use the app's
 Import to load `scripts/notes-export.json`.
 
-**Verified against the real `Notes.db` (187 rows):**
-- **Timestamp source is the `time` column** (not `date`). Rows store a full datetime *with
-  year*, e.g. `"30Mar 2021 12:38 PM"` → parsed to epoch millis for `createdAt`/`updatedAt`.
-  The one oldest row (`_id=19`) stores time-of-day only → synthesized timestamp interpolated
-  between its `_id`-adjacent neighbors to preserve ordering. The `date` column (`DDMon`, no
-  year) is ignored.
-- **State counts present: 1=141, 2=26, 8=1, 9=19** (no 3/4/5/6/7/10, and 0 reminders/`rem`
+**Ordering is the priority.** The old app rendered every list by `_id DESC` (insertion
+order, `NotesDb.java`); its `time` column is the *last-edit* time (rewritten on every edit,
+`_id` unchanged), so it's non-monotonic vs `_id` — ~24% of rows are "out of order" by time.
+The new app's default sort is Created-desc, so `createdAt` must climb with `_id` to reproduce
+the old order. `migrate.ts` therefore **splits the two dates**:
+- **`createdAt`** — synthesized to increase strictly in `_id` order, spread *evenly* across
+  the real date span (min→max of parsed times). Guarantees the default view matches the old
+  app exactly; varied (not one date) but not per-note accurate. Never displayed — sort-only.
+- **`updatedAt`** — the **true parsed edit date** from the `time` column (e.g. `"30Mar 2021
+  12:38 PM"`), which is what `NoteCard` shows. Real, varied dates on cards.
+- Consequence (accepted): edited-out-of-order notes get `createdAt > updatedAt`. Harmless —
+  `createdAt` is invisible, and new in-app notes (`createdAt=updatedAt=now`) sort above all
+  imports. The one oldest row (`_id=19`, time-of-day only, no year) is interpolated from its
+  `_id`-neighbors for both fields. The `date` column (`DDMon`, no year) is ignored.
+
+**Verified against the real `Notes.db` (186 rows):**
+- **State counts present: 1=140, 2=26, 8=1, 9=19** (no 3/4/5/6/7/10, and 0 reminders/`rem`
   all `"0"`).
 - Mapping: `state==2` → `isFavourite`; `state==9` → `isArchived`; everything else (incl.
-  unused category `8`) → plain note. `notes` blob → `text`; new uuid `id`. All 187 rows
+  unused category `8`) → plain note. `notes` blob → `text`; new uuid `id`. All 186 rows
   import (no trash to skip in practice).
 
 ---
 
 ## 8. Planned Enhancements (approved, post-v1)
 
-Three additions that fit the existing single-`text`-field model without a backend or new
+Four additions that fit the existing single-`text`-field model without a backend or new
 services. Explicitly **out of scope**: undo, reminders, quick-capture/widgets, labels/tags,
 per-note colors, and AI features (all considered and declined).
 
 ### 8.1 Pin to top
 Distinct from Favourite (which is a *collection/filter*): a pin keeps a note physically at the
-top of a list. Adds `isPinned` (independent of `isFavourite`/`isArchived` — no mutual
-exclusivity). Pinned notes render in a group above the rest in **All Notes** (and other
-non-trash views); ties fall back to the active sort (§8.3). UI: toggle in the editor overflow
-+ bulk action; a small pin glyph on `NoteCard`. Confirms per the feedback rules — toast (state
-change isn't self-evident from the icon alone). Reverses the old "pinned dropped" decision
-(§1); old-app `state==10` was unused so there's nothing to migrate.
+top of a list. Adds `isPinned` (schema-independent of `isFavourite`/`isArchived` — no mutual
+exclusivity in the data model). Pinned notes render in a group above the rest, with the active
+sort (§8.3) applied *within* each group (pinned block, then unpinned block); JS's stable sort
+keeps within-group order identical to the current sort. UI: a bulk selection action only (no
+toggle in the note editor); a small pin glyph on the **right** of `NoteCard`. Confirms per the
+feedback rules — toast (state change isn't self-evident from the icon alone). Reverses the old
+"pinned dropped" decision (§1); old-app `state==10` was unused so there's nothing to migrate.
+
+**Pin is an "All Notes / Favourites" concept — normalized in the mutation layer:**
+- **Toggling pin does not bump `updatedAt`** (it's metadata, not a content edit) — so unpinning
+  never disturbs the Modified sort. A dedicated `repo.setPinned(id, isPinned)` writes only
+  `isPinned`, bypassing `updateNote`'s `updatedAt` touch.
+- **Archiving clears pin** (`isPinned:false`) — an archived note leaves All Notes, so its pin
+  has nowhere to render. **Trashing clears pin** too (like it already clears fav/archive).
+  **Favouriting does NOT clear pin** — favourites still live in All Notes, so a pinned favourite
+  stays pinned there (and in the Favourites view).
+- **Bulk toggle**: a single "pin" action that pins the selection if *any* selected note is
+  unpinned, and only unpins when *all* are already pinned — mirrors `bulkFavourite`/`bulkUnfavourite`.
+- Net invariant: the pinned group only ever renders in **All Notes** and **Favourites**; the
+  **Archived** and **Trash** views are always flat.
 
 ### 8.2 Auto-linkified note text
 Since a note is raw text, detect URLs, emails, and phone numbers in the rendered body and make
@@ -198,6 +222,14 @@ falls back to modified order. Pinned group (§8.1) always sorts above, with the 
 applied within each group. Selection lives in the global overflow menu; persist the choice
 locally (per-view is out of scope — one global sort). FlashList v2 supports the reorder gesture
 via `react-native-reanimated`/gesture-handler already in the stack.
+
+### 8.4 Copy icon on list item
+A small copy affordance on each `NoteCard` to copy the note's full text to the clipboard
+without opening it. Uses `expo-clipboard` (already a dependency). **No schema change** —
+pure UI. Confirms with a toast ("Copied") per the feedback rules (no visible state change).
+Tapping the icon must not trigger the card's open/select gesture — it handles its own press,
+like the linkified spans (§8.2). Placement: aligned with the date row on the card; hidden in
+selection mode so it doesn't compete with the selection tap.
 
 ---
 

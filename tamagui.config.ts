@@ -4,23 +4,23 @@ import { createTamagui } from 'tamagui';
 // Monochrome (black & white) ramps to match the old CS Notes app.
 // color1 = app background (lightest in light mode) … color12 = primary text (darkest).
 const lightGray = {
-  color1: '#f2f2f2', // screen background
-  color2: '#ffffff', // cards / surfaces
-  color3: '#ededed',
+  color1: '#f5f5f5', // screen background (old app: light_white)
+  color2: '#ffffff', // cards / surfaces (old app: white)
+  color3: '#d3d3d3', // selected list item (old app: list_select)
   color4: '#e2e2e2', // borders / separators
   color5: '#d6d6d6',
   color6: '#c9c9c9',
   color7: '#b3b3b3',
   color8: '#8f8f8f',
-  color9: '#7a7a7a', // muted (dates)
+  color9: '#696969', // muted (dates) — old app: grey
   color10: '#5c5c5c', // secondary text / icons
   color11: '#333333',
-  color12: '#111111', // primary text
-  background: '#f2f2f2',
+  color12: '#000000', // primary text — old app: black
+  background: '#f5f5f5',
   backgroundHover: '#ececec',
   backgroundPress: '#e4e4e4',
   backgroundFocus: '#ececec',
-  color: '#111111',
+  color: '#000000',
   colorHover: '#000000',
   colorPress: '#000000',
   colorFocus: '#000000',

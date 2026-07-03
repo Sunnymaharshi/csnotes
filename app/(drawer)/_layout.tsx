@@ -222,8 +222,13 @@ export default function DrawerLayout() {
         sceneStyle: { backgroundColor: theme.color1.val },
         drawerType: 'front',
         overlayColor: 'rgba(0,0,0,0.5)',
-        swipeEdgeWidth: 60,
-        swipeMinDistance: 15,
+        // Keep the open-swipe confined to a narrow left edge band so the note
+        // list owns the rest of the horizontal surface — a vertical scroll that
+        // starts mid-list can't accidentally grab the drawer. Defaults
+        // (edgeWidth 32 / minDistance 60) also make an accidental micro-drag
+        // snap back instead of committing to open. See react-native-drawer-layout.
+        swipeEdgeWidth: 40,
+        swipeMinDistance: 60,
       }}
     >
       <Drawer.Screen name="index" options={{ title: 'All Notes' }} />

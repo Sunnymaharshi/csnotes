@@ -11,9 +11,11 @@ export interface NotesRepository {
   /** Pass `id` to claim it up front (e.g. to make a create idempotent against retries/races). */
   createNote(data: Omit<Note, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): Promise<Note>;
   updateNote(id: string, data: Partial<Omit<Note, 'id' | 'createdAt'>>): Promise<void>;
+  /** Toggle pin only — deliberately does NOT bump updatedAt (§8.1: pin is metadata, not an edit). */
+  setPinned(id: string, isPinned: boolean): Promise<void>;
   deleteNote(id: string): Promise<void>;
 
-  /** Move to trash (set deletedAt, clear isFavourite/isArchived so restore always returns to normal). */
+  /** Move to trash (set deletedAt, clear isFavourite/isArchived/isPinned so restore always returns to normal). */
   trashNote(id: string): Promise<void>;
   /** Restore from trash (clear deletedAt). */
   restoreNote(id: string): Promise<void>;

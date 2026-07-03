@@ -10,7 +10,10 @@ import { useNotesStore } from '../src/store/notesStore';
 import { createFirestoreRepo } from '../src/data/firestoreNotesRepo';
 import { useNotesWatcher } from '../src/hooks/useNotesWatcher';
 import { useThemeStore } from '../src/store/themeStore';
+import { useSortStore } from '../src/store/sortStore';
 import { ThemedAlert } from '../src/components/ThemedAlert';
+import { LinkOptionsMenu } from '../src/components/LinkOptionsMenu';
+import { SortMenu } from '../src/components/SortMenu';
 import tamaguiConfig, { screenBackground, primaryText } from '../tamagui.config';
 
 export default function RootLayout() {
@@ -32,7 +35,10 @@ function RootLayoutNav() {
   const { isReady: shareIntentReady, hasShareIntent, shareIntent, resetShareIntent } = useShareIntentContext();
   useNotesWatcher();
 
+  const loadSort = useSortStore((s) => s.loadSort);
+
   useEffect(() => { loadThemeMode(); }, [loadThemeMode]);
+  useEffect(() => { loadSort(); }, [loadSort]);
 
   // Open a fresh note editor pre-filled with text shared in from another app.
   // Uses push (not replace) so the notes list stays underneath in history —
@@ -97,11 +103,13 @@ function RootLayoutNav() {
                 headerStyle: { backgroundColor: screenBackground[effectiveScheme] },
                 headerTintColor: primaryText[effectiveScheme],
                 headerTitleStyle: { fontWeight: '700' },
-                headerShadowVisible: false,
+                headerShadowVisible: true,
               }}
             />
           </Stack>
           <ThemedAlert />
+          <LinkOptionsMenu />
+          <SortMenu />
         </Theme>
       </TamaguiProvider>
     </GestureHandlerRootView>

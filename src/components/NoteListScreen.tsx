@@ -1,14 +1,14 @@
-import { useCallback, useLayoutEffect } from 'react';
+import { useCallback, useLayoutEffect, useMemo } from 'react';
 import { StyleSheet, View, useColorScheme } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { YStack, useTheme } from 'tamagui';
 import { Plus } from 'lucide-react-native';
 import { PressableScale } from './PressableScale';
-import { pressFeedback } from '../lib/haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRouter } from 'expo-router';
 import { useNotesStore } from '../store/notesStore';
 import { useThemeStore } from '../store/themeStore';
+import { useSortStore } from '../store/sortStore';
 import { NoteCard } from './NoteCard';
 import { EmptyState } from './EmptyState';
 import { SearchBar } from './SearchBar';
@@ -26,10 +26,12 @@ export function NoteListScreen({
   notes,
   emptyLabel,
   showFab = false,
+  allowPin = true,
 }: {
   notes: Note[];
   emptyLabel: string;
   showFab?: boolean;
+  allowPin?: boolean;
 }) {
   const router = useRouter();
   const navigation = useNavigation();
@@ -43,8 +45,20 @@ export function NoteListScreen({
   const trashCount = useNotesStore((s) => s.trash.length);
   const totalCount = useNotesStore((s) => s.allNotes.length + s.archived.length + s.trash.length);
 
+  const sortField = useSortStore((s) => s.field);
+  const sortDir = useSortStore((s) => s.dir);
+  const sortedNotes = useMemo(() => {
+    const key = sortField === 'created' ? 'createdAt' : 'updatedAt';
+    const mul = sortDir === 'asc' ? 1 : -1;
+    // Pinned notes group above the rest (§8.1); within each group the chosen sort
+    // applies. Array.sort is stable, so within-group order matches the plain sort.
+    return [...notes].sort(
+      (a, b) => Number(!!b.isPinned) - Number(!!a.isPinned) || (a[key] - b[key]) * mul,
+    );
+  }, [notes, sortField, sortDir]);
+
   const selection = useSelectionMode();
-  const search = useSearchBar(notes);
+  const search = useSearchBar(sortedNotes);
   const globalOverflowItems = useGlobalOverflowItems(repo, trashCount, search.open, totalCount);
   const contentLocked = useDrawerCloseGuard();
 
@@ -59,7 +73,7 @@ export function NoteListScreen({
           <SelectionHeaderRight
             onFavourite={() => bulkFavourite(repo!, selectedNotes).then(selection.exit)}
             onShare={() => bulkShare(selectedNotes)}
-            overflowItems={repo ? buildSelectionOverflowItems(repo, selectedNotes, selection.exit) : []}
+            overflowItems={repo ? buildSelectionOverflowItems(repo, selectedNotes, selection.exit, false, allowPin) : []}
           />
         ),
       });
@@ -76,7 +90,6 @@ export function NoteListScreen({
   }, [navigation, selection.isSelecting, selection.selectedIds, repo, notes, globalOverflowItems]);
 
   function handleCreate() {
-    pressFeedback();
     router.push('/note/new');
   }
 
@@ -139,7 +152,7 @@ export function NoteListScreen({
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  list: { padding: 16, paddingBottom: 100 },
-  separator: { height: 8 },
-  fabPressable: { position: 'absolute', bottom: 48, right: 32 },
+  list: { padding: 12, paddingBottom: 100 },
+  separator: { height: 10 },
+  fabPressable: { position: 'absolute', bottom: 36, right: 26 },
 });
