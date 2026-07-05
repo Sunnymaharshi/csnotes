@@ -2,6 +2,8 @@ import { Modal, Pressable, StyleSheet } from 'react-native';
 import { YStack, XStack, Text, useTheme } from 'tamagui';
 import { Check, type LucideIcon } from 'lucide-react-native';
 import { useSortStore, type SortField, type SortDir } from '../store/sortStore';
+import { useBottomNavStore } from '../store/bottomNavStore';
+import { BottomSheet } from './BottomSheet';
 import { ICON, ICON_STROKE } from '../lib/icons';
 import { tapFeedback } from '../lib/haptics';
 
@@ -21,6 +23,7 @@ export function SortMenu() {
     closeMenu();
   };
   const theme = useTheme();
+  const bottomNav = useBottomNavStore((s) => s.enabled);
 
   const fieldRows: { value: SortField; label: string }[] = [
     { value: 'created', label: 'Created date' },
@@ -30,6 +33,45 @@ export function SortMenu() {
     { value: 'desc', label: 'Newest first' },
     { value: 'asc', label: 'Oldest first' },
   ];
+
+  const rows = (
+    <>
+      <SectionLabel>Sort by</SectionLabel>
+      {fieldRows.map((row) => (
+        <Row
+          key={row.value}
+          label={row.label}
+          active={field === row.value}
+          onPress={() => selectField(row.value)}
+          theme={theme}
+        />
+      ))}
+
+      <YStack height={StyleSheet.hairlineWidth} backgroundColor="$color4" marginVertical={4} />
+
+      <SectionLabel>Order</SectionLabel>
+      {dirRows.map((row) => (
+        <Row
+          key={row.value}
+          label={row.label}
+          active={dir === row.value}
+          onPress={() => selectDir(row.value)}
+          theme={theme}
+        />
+      ))}
+    </>
+  );
+
+  // In bottom-nav mode the sort menu reuses the draggable BottomSheet (thumb
+  // zone, §8.5) to match the other bottom sheets; otherwise it drops from the
+  // top-right overflow.
+  if (bottomNav) {
+    return (
+      <BottomSheet visible={menuVisible} onClose={closeMenu}>
+        {rows}
+      </BottomSheet>
+    );
+  }
 
   return (
     <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={closeMenu}>
@@ -54,29 +96,7 @@ export function SortMenu() {
             minWidth={220}
             overflow="hidden"
           >
-            <SectionLabel>Sort by</SectionLabel>
-            {fieldRows.map((row) => (
-              <Row
-                key={row.value}
-                label={row.label}
-                active={field === row.value}
-                onPress={() => selectField(row.value)}
-                theme={theme}
-              />
-            ))}
-
-            <YStack height={StyleSheet.hairlineWidth} backgroundColor="$color4" marginVertical={4} />
-
-            <SectionLabel>Order</SectionLabel>
-            {dirRows.map((row) => (
-              <Row
-                key={row.value}
-                label={row.label}
-                active={dir === row.value}
-                onPress={() => selectDir(row.value)}
-                theme={theme}
-              />
-            ))}
+            {rows}
           </YStack>
         </YStack>
       </Pressable>

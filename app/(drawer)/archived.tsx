@@ -4,5 +4,5 @@ import { NoteListScreen } from '../../src/components/NoteListScreen';
 export default function ArchivedScreen() {
   const archived = useNotesStore((s) => s.archived);
 
-  return <NoteListScreen notes={archived} emptyLabel="Nothing Archived" allowPin={false} />;
+  return <NoteListScreen notes={archived} emptyLabel="Nothing Archived" view="archived" allowPin={false} />;
 }

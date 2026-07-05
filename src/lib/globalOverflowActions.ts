@@ -69,6 +69,29 @@ export function confirmDeleteForever(count: number, onConfirm: () => void) {
   );
 }
 
+export function confirmSignOut(onConfirm: () => void) {
+  showAlert(
+    'Sign out',
+    'Sign out of this account? Your notes stay safe in the cloud and sync back when you sign in again.',
+    [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign out', onPress: onConfirm },
+    ],
+  );
+}
+
+export function confirmDeleteAccount(onConfirm: () => void) {
+  showAlert(
+    'Delete account',
+    'Permanently delete your account and ALL notes (favourites, archived, and trash) from every device? ' +
+      'This cannot be undone.\n\nTip: export a backup first if you want to keep a copy.',
+    [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete Account', style: 'destructive', onPress: onConfirm },
+    ],
+  );
+}
+
 export function confirmDeleteEverything(repo: NotesRepository, totalCount: number) {
   if (totalCount === 0) {
     showToast('There are no notes to delete');

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { StyleSheet, TextInput, Pressable } from 'react-native';
 import { XStack, useTheme } from 'tamagui';
 import { Search, X } from 'lucide-react-native';
@@ -13,6 +14,15 @@ export function SearchBar({
   onClose: () => void;
 }) {
   const theme = useTheme();
+  const inputRef = useRef<TextInput>(null);
+
+  // autoFocus alone can lose the race against the overflow menu's close
+  // animation (the keyboard never opens), so focus explicitly after a short
+  // delay once that animation has settled.
+  useEffect(() => {
+    const t = setTimeout(() => inputRef.current?.focus(), 150);
+    return () => clearTimeout(t);
+  }, []);
 
   return (
     <XStack
@@ -28,12 +38,12 @@ export function SearchBar({
     >
       <Search size={ICON.sm} strokeWidth={ICON_STROKE} color={theme.color9.val} />
       <TextInput
+        ref={inputRef}
         style={[styles.input, { color: theme.color12.val }]}
         placeholder="Search notes…"
         placeholderTextColor={theme.color9.val}
         value={value}
         onChangeText={onChangeText}
-        autoFocus
         returnKeyType="search"
       />
       <Pressable onPress={onClose} hitSlop={8}>

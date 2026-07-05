@@ -7,7 +7,7 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "scheme": "csnotes",
-"android": {
+    "android": {
       "package": "com.sunny.csnotes",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
@@ -28,10 +28,26 @@
       [
         "expo-share-intent",
         {
-          "androidIntentFilters": ["text/*"],
+          "androidIntentFilters": [
+            "text/*"
+          ],
           "disableIOS": true
         }
-      ]
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#050506",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#050506"
+          }
+        }
+      ],
+      "expo-sqlite"
     ]
   }
 }

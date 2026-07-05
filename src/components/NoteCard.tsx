@@ -15,6 +15,7 @@ export const NoteCard = memo(function NoteCard({
   onLongPress,
   onToggleSelect,
   date,
+  layout = 'list',
 }: {
   note: Note;
   selectionMode?: boolean;
@@ -22,6 +23,7 @@ export const NoteCard = memo(function NoteCard({
   onLongPress?: () => void;
   onToggleSelect?: () => void;
   date?: number;
+  layout?: 'list' | 'grid';
 }) {
   const router = useRouter();
   const theme = useTheme();
@@ -49,7 +51,7 @@ export const NoteCard = memo(function NoteCard({
         paddingBottom={8}
         gap="$1"
       >
-        <Text fontSize="$5" fontWeight="700" color="$color12" numberOfLines={8}>
+        <Text fontSize="$5" fontWeight="700" color="$color12" numberOfLines={layout === 'grid' ? 12 : 8}>
           {note.text.trim() || 'Empty note'}
         </Text>
         <XStack justifyContent="flex-end" alignItems="center" gap="$2">

@@ -28,8 +28,8 @@ import os, math, cairosvg
 # --- Moon shape ---------------------------------------------------------------
 # The crescent = the region inside circle C1 but outside circle C2.
 # Move C2 closer to C1 (smaller x) and/or raise R2 to make the crescent THINNER.
-C1 = (512, 512); R1 = 300          # main moon disc
-C2 = (614, 512); R2 = 286          # cut-out disc (thinner crescent = C2 closer / R2 bigger)
+C1 = (512, 512); R1 = 370          # main moon disc
+C2 = (695, 512); R2 = 356          # cut-out disc (thinner crescent = C2 closer / R2 bigger)
 
 TILT = -36                         # moon tilt in degrees (more negative = leans further left)
 PIV  = (455, 512)                  # rotation pivot (~visual centre of the composite)
@@ -44,13 +44,13 @@ BG_BOTTOM  = "#050506"             # near-black background (bottom)
 # Each line is horizontal from x=LINES_X0 (tucked under the moon) to x=RIGHT[i].
 # Shift LINES_X0 + RIGHT together LEFT to move lines closer to / more behind the moon.
 # The last RIGHT value is pulled in so that line's right cap hides behind the moon.
-LINES_X0   = 392
+LINES_X0   = 430
 YS         = [512 - 118, 512 - 24, 512 + 70]   # vertical positions of the 3 lines
 RIGHT      = [658, 618, 530]                    # right end x of each line
 LINE_WIDTH = 26
 
 # --- Per-asset scale (fraction of canvas the moon occupies) -------------------
-SCALE_ICON   = 0.86
+SCALE_ICON   = 0.92
 SCALE_FG     = 0.62   # android adaptive foreground (kept inside the safe zone)
 SCALE_MONO   = 0.62
 SCALE_SPLASH = 0.52

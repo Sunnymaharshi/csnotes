@@ -7,8 +7,25 @@ data model, migration, and dependency policy.
 
 ## Gotchas
 
-- Note = **single `text` field**, no title. UI never touches Firebase directly — only
-  `NotesRepository`; `useNotesWatcher` feeds Firestore into the Zustand store.
+- Note = **single `text` field**, no title. UI never touches the backend directly — only
+  `NotesRepository`; `useNotesWatcher` feeds it into the Zustand store.
+- **Two repos, one interface** (PROJECT_PLAN §8.6): `app/_layout.tsx` picks `firestoreNotesRepo`
+  (signed in) or `localNotesRepo` (guest, on-device SQLite). Guest flag lives in
+  `authStore`; `syncGuest.signInAndSync` migrates guest notes into an account on login. Any repo
+  change must land in **both** repos or it breaks one mode.
+- **Sort** (§8.3) = `sortStore` (Created/Modified × asc/desc), one global setting; **layout**
+  (list/grid) = `layoutStore`. Both persist to AsyncStorage. **No manual/drag sort** — dropped;
+  `sortOrder` on `Note` is reserved/unused.
+- **Bottom-nav** (§8.5) is an opt-in toggle (`bottomNavStore`, default OFF = top header). When
+  ON: `HeaderStar` → `BottomBar` (All Notes/Favourites/Search + one hamburger → sectioned
+  `BottomSheetSections` of actions + nav), header is title-only with
+  **hamburger hidden + drawer swipe disabled** (`_layout` reads the store), selection → `BottomSelectionBar`,
+  and overflow/nav/sort render as bottom `Modal`s (`BottomSheet`; `SortMenu` self-anchors to the
+  bottom). FAB stays floating (raised above the bar). The branch lives in **both** `NoteListScreen.tsx`
+  **and** `app/(drawer)/trash.tsx` (near-duplicates) — change both. When ON, `SafeAreaView` drops
+  its `bottom` edge because the bars own that inset.
+- **Auto-linkify** (§8.2): render note text via `LinkifiedText`; detection in `src/lib/linkify.ts`,
+  actions (open/copy) in `src/lib/linkActions.ts` — shared by card previews and the editor.
 - `isFavourite`/`isArchived` are independent fields; editor/bulk UI enforces mutual
   exclusivity by convention (old-app behavior).
 - **No autosave-while-typing** (`app/note/[id].tsx`): saves fire only on ✓/back/unmount —

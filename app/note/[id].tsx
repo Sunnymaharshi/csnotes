@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { YStack, XStack, Text, useTheme } from 'tamagui';
 import { LinkifiedText } from '../../src/components/LinkifiedText';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { Star, Archive, ArchiveRestore, Check, Share2, Trash2 } from 'lucide-react-native';
 import { ICON, ICON_STROKE } from '../../src/lib/icons';
@@ -109,13 +109,9 @@ export default function NoteScreen() {
   // manages its own selection.
   const [pendingCaret, setPendingCaret] = useState<number | null>(null);
   const inputRef = useRef<TextInput>(null);
-  const insets = useSafeAreaInsets();
 
   // Expo SDK 57 is edge-to-edge, where Android's adjustResize no longer shrinks the
-  // window — so KeyboardAvoidingView (behavior:undefined on Android) left the bottom
-  // of long notes hidden behind the keyboard. Drive layout off real keyboard events
-  // instead and pad the editor up above the keyboard. SafeAreaView already reserves
-  // insets.bottom, so subtract it to avoid double-counting.
+  // window. Track real keyboard events to hide the bottom action bar while typing.
   const [kbHeight, setKbHeight] = useState(0);
   useEffect(() => {
     const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -370,7 +366,7 @@ export default function NoteScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.color1.val }]} edges={['bottom']}>
-      <YStack flex={1} paddingBottom={Math.max(0, kbHeight - insets.bottom)}>
+      <YStack flex={1}>
         <XStack paddingHorizontal="$4" paddingTop="$2" paddingBottom="$1" justifyContent="flex-end">
           <Text fontSize="$2" color="$color9">
             {note ? fullDateTime(note.updatedAt) : ''}

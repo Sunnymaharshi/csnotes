@@ -11,5 +11,5 @@ export default function NotesScreen() {
   // flash on screen for a frame first.
   if (hasShareIntent && shareIntent.text) return null;
 
-  return <NoteListScreen notes={allNotes} emptyLabel="No Notes" showFab />;
+  return <NoteListScreen notes={allNotes} emptyLabel="No Notes" view="all" showFab />;
 }
