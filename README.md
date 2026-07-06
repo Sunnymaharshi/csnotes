@@ -4,6 +4,8 @@ An **Android** notes app backed by **Firebase**, rebuilt from an old Java + SQLi
 Offline-first, private (only the owner reads their notes), and free to host.
 
 - **Google Sign-In** with automatic real-time Firestore sync across devices.
+- **Guest mode** — use the app fully offline with on-device SQLite; sign in later and your
+  guest notes migrate into the account.
 - Works fully **offline** — notes load from disk, writes queue and sync when back online.
 - **Monochrome** black-and-white look with dark mode.
 
@@ -15,13 +17,18 @@ See [`PROJECT_PLAN.md`](./PROJECT_PLAN.md) for the full scope, data model, and m
 
 ## Features
 
-- **All Notes** list (newest first), excluding archived and trashed.
-- Create / edit / delete a note — a note is a **single text field** (no title), auto-saved.
-- **Favourite** and **Archive** as independent flags.
+- **All Notes** list, excluding archived and trashed.
+- Create / edit / delete a note — a note is a **single text field** (no title). Edits save
+  on ✓ / back / unmount (no autosave-while-typing).
+- **Pin to top**, **Favourite**, and **Archive** as independent flags.
+- **Sort** by Created or Modified date, ascending or descending (one global setting).
+- **List or grid** (masonry) layout.
 - **Trash**: soft-delete with an Undo toast → Trash view (Restore / Empty trash).
-- **Search** note text and **Share** a note out.
-- **Export / Import** all notes as JSON (your own backup, no lock-in).
-- **Dark mode** + monochrome styling.
+- **Search** note text (per-view) and **Share** a note out; **share text into** the app to
+  start a prefilled new note.
+- **Auto-linkified** note text — tap to open, long-press to copy URLs/emails/phones.
+- **Backup / restore** all notes as JSON via the system file picker (your own backup, no lock-in).
+- Optional **bottom navigation** bar layout, haptic feedback, **dark mode** + monochrome styling.
 
 ---
 
@@ -57,7 +64,10 @@ UI (screens/components)  →  NotesRepository  →  @react-native-firebase (Fire
 ```
 
 - The UI **never** calls Firebase directly — only through `NotesRepository`.
-- Firestore listeners feed the Zustand store; the UI subscribes to the store.
+- **Two repos, one interface**: `firestoreNotesRepo` (signed in) or `localNotesRepo`
+  (guest, on-device SQLite). The root layout picks one; `syncGuest` migrates guest notes
+  into the account on sign-in.
+- Real-time watchers feed the Zustand store; the UI subscribes to the store.
 - Firestore offline persistence is on by default; writes queue and sync automatically.
 
 **Offline behaviour:**
@@ -72,6 +82,7 @@ interface Note {
   text: string;             // single content field (no separate title)
   isFavourite: boolean;     // independent flag
   isArchived: boolean;      // independent flag
+  isPinned?: boolean;       // pinned notes sort above the rest
   deletedAt: number | null; // non-null = in Trash
   createdAt: number;        // epoch millis
   updatedAt: number;        // epoch millis
@@ -90,11 +101,11 @@ app/                     screens (Expo Router)
   note/[id].tsx          editor
   (drawer)/              All Notes / Favourites / Archived / Trash / Settings
 src/
-  components/            NoteCard, EmptyState, OverflowMenu
-  data/                  NotesRepository, firebase, firestoreNotesRepo
-  store/                 notesStore, themeStore
-  hooks/                 useNotesWatcher
-  lib/                   exportImport, googleAuth, compactDate, uuid
+  components/            NoteListScreen, NoteCard, BottomSheet, SortMenu, LinkifiedText, …
+  data/                  NotesRepository, firestoreNotesRepo, localNotesRepo (SQLite)
+  store/                 notesStore, authStore, sortStore, layoutStore, bottomNavStore, themeStore
+  hooks/                 useNotesWatcher, useSelectionMode, useSearchBar
+  lib/                   exportImport, syncGuest, googleAuth, linkify, haptics, toast, uuid
   types/                 Note
 tamagui.config.ts        monochrome light/dark themes
 firestore.rules          Firestore security rules
