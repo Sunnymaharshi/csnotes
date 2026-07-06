@@ -38,7 +38,10 @@ data model, and migration.
   (`expo-share-intent`, Android `ACTION_SEND`/`text/*`).
 - **Dark mode** + monochrome black-and-white styling matching the old app.
 - **List / grid layout** toggle for note lists (persisted, `layoutStore`).
-- **Export / Import** all notes as JSON.
+- **Export / Import** all notes as JSON. Export saves into a user-chosen folder (e.g. "CS
+  Notes") via the Storage Access Framework — the granted folder is remembered, and files are
+  named `DDMonYYYY hh-mm-ssAM/PM CS Notes.json` (`src/lib/exportImport.ts`). Import opens the
+  system file manager to pick a backup.
 - **Google Sign-In** + automatic Firestore sync across devices, **or guest mode** — use the app
   with no account (notes live on-device in local SQLite); signing in later migrates them into
   the account (see §4, §8.6).
@@ -64,7 +67,7 @@ data model, and migration.
 | Auth | `@react-native-google-signin/google-signin` |
 | Icons | lucide-react-native (conventions in `src/lib/icons.ts`) |
 | Feedback | `expo-haptics` (via `src/lib/haptics.ts`) + Android toasts (`src/lib/toast.ts`) |
-| Export/Import | `expo-file-system` + `expo-sharing` / `expo-document-picker` |
+| Export/Import | `expo-file-system` (Storage Access Framework for the backup folder) + `expo-document-picker` |
 | Share-in | `expo-share-intent` (Android `ACTION_SEND`, `text/*` only) |
 
 `@react-native-firebase` (native Firebase SDK) provides full Firestore offline persistence
@@ -268,9 +271,11 @@ redundant second "more" button): `[🗒 All Notes] [★ Favourites] [🔍 Search
   Settings (`BOTTOM_NAV_MENU_ITEMS` from `app/(drawer)/_layout.tsx`).
 - **FAB** stays **floating** (bottom-right, All Notes only) in both layouts — it just sits
   above the bar in bottom-nav mode. Hidden while searching, like the top-nav layout.
-- **Sheets/submenus** are hand-rolled `Modal`s (`src/components/BottomSheet.tsx` →
-  `BottomSheetMenu`), mirroring `OverflowMenu` — no new dependency. In bottom-nav mode the
-  **Sort menu** (`SortMenu`) also anchors to the bottom instead of the top-right.
+- **Sheets/submenus** all share one `src/components/BottomSheet.tsx` (a bottom-anchored
+  `Modal` with a grabber that **drags to dismiss** — reanimated + gesture-handler, wrapped in
+  a `GestureHandlerRootView` *inside* the Modal so gestures work). `BottomSheetMenu` (flat) and
+  `BottomSheetSections` (grouped) render on top of it. In bottom-nav mode the **Sort menu**
+  (`SortMenu`) reuses `BottomSheet` too instead of its top-right dropdown.
 
 Applies to all four list views (index/favourites/archived/trash). **Selection mode moves to a
 bottom bar too** in bottom-nav mode (`src/components/BottomSelectionBar.tsx`); the top-nav
@@ -278,9 +283,10 @@ layout keeps the top `SelectionHeader`. Both selection bars expose the same acti
 **Favourite · Delete · Share · Pin · More** — Pin (`buildSelectionPinItem`, hidden in
 Archived/Trash per §8.1) and Delete (`buildSelectionDeleteItem`, "delete forever" on Trash)
 are dedicated icons; the rest (unfavourite/archive/unarchive/restore) stay in the More
-overflow (`buildSelectionOverflowItems`). Settings and the note editor (own bottom action bar)
-are untouched. The branch lives in both `NoteListScreen.tsx` and the near-duplicate
-`app/(drawer)/trash.tsx`.
+overflow (`buildSelectionOverflowItems`). **Hardware back exits selection first** (then closes
+search, then the drawer) on every list view. Settings and the note editor (own bottom action
+bar) are untouched. The branch lives in both `NoteListScreen.tsx` and the near-duplicate
+`app/(drawer)/trash.tsx` (a shared `useListChrome` extraction is still pending).
 
 ### 8.6 Guest mode + layout toggle (shipped)
 **Guest mode** lets someone use the app with no account. `src/store/authStore.ts` persists a
@@ -371,20 +377,45 @@ not gaps:
 
 ## 11. Pre-Publish Checklist (Play Store)
 
-Audited 2026-07-04. Store metadata, build config, and code cleanliness are in good shape
+Audited 2026-07-04 (updated 2026-07-06). Store metadata and code cleanliness are in good shape
 (`applicationId` `com.sunny.csnotes` is set, icons/adaptive icon configured, version `1.0.0`,
-no leaked secrets, no stray TODO/console.log, dependencies stable on Expo SDK 57). Before
-submitting:
+no leaked secrets, no stray TODO/console.log, dependencies stable on Expo SDK 57).
 
-- [ ] **Privacy policy (blocker).** Play Store requires one since the app uses Google
-  Sign-In + Firebase (handles auth/user data). Draft it, host it (e.g. GitHub Pages), and
-  add the URL to the Play Console listing.
-- [ ] **`eas.json` `appVersionSource`.** Not currently set — decide whether to rely on EAS's
-  remote versionCode auto-increment or set it explicitly, before the first production build.
-- [ ] **Production Firebase project.** Confirm the local `google-services.json` (gitignored,
-  present at repo root and `android/app/`) points at the production project, not a dev/test
-  one, before building for release.
-- [ ] **Splash screen.** No splash config was found in `app.json`/plugins — confirm one
-  actually shows on launch, or that a blank launch is intentional.
-- [ ] **`eas.json` `submit.production`.** Currently an empty block (fine as a default) —
-  make sure a Play Console service-account key is set up before running `eas submit`.
+**Encryption:** E2E was considered and **declined** (2026-07-06) — it conflicts with Firestore
+sync/restore-on-login and would require a per-device passphrase; standard Firebase (TLS in
+transit + at-rest on Google + Security Rules) is the norm for this app category and Play Store
+does not require E2E. See §8 out-of-scope philosophy.
+
+**Build strategy (decided 2026-07-06): EAS free tier now, local later if wanted.** The `/android`
+folder is gitignored/prebuild-generated, so hand-editing `build.gradle` for signing is fragile
+(a `prebuild --clean` wipes it). Instead let **EAS own the upload keystore** (stored in its
+credentials system, independent of the throwaway native folder). Ship the first build with
+`eas build -p android --profile production` on the **free tier** (monthly build cap + queue,
+fine for a personal app). **Enable Play App Signing at first upload** (Google holds the real
+app-signing key; the upload key becomes resettable → no permanent lock-out risk). Moving to
+**local builds later is non-blocking**: `eas build --local -p android --profile production`
+reuses the same stored credentials (no re-signing), or download the keystore via
+`eas credentials -p android` and sign a manual Gradle build. Build location and signing key are
+independent — Play only requires every upload use the same upload key. **Free except the
+one-time $25 Play Console registration.**
+
+Before submitting:
+
+- [ ] **Release signing (blocker).** Use **EAS-owned upload keystore** — run
+  `eas build -p android --profile production` (free tier) and accept EAS's offer to generate +
+  store the keystore (download a backup regardless). No `build.gradle` edits (native folder is
+  regenerated). Enable **Play App Signing** at first upload so a lost upload key is recoverable.
+- [x] **Privacy policy (blocker).** Drafted at repo-root `PRIVACY_POLICY.md` (covers guest =
+  no data, signed-in = Google email/ID + notes in Firebase, TLS + at-rest, Security Rules, no
+  third-party sharing, in-app account/data deletion). **Still TODO:** host it (GitHub Pages) and
+  add the URL to the Play Console listing + Data safety form.
+- [x] **`eas.json` `appVersionSource`.** Set to `"remote"` — EAS auto-manages `versionCode`.
+- [x] **Production Firebase project.** Confirmed `google-services.json` points at production
+  project `csnotes-d3693` (`com.sunny.csnotes`).
+- [x] **Splash screen.** Already configured via the `expo-splash-screen` plugin in `app.json`
+  (`splash-icon.png`, dark variant). Verify it renders on a real launch.
+- [ ] **`eas.json` `submit.production`.** Still an empty block (fine as a default) — set up a
+  Play Console service-account key later if you want `eas submit` to auto-upload; manual `.aab`
+  upload works without it.
+- [ ] **Play Console.** One-time $25 registration; complete the **Data safety form** (collects
+  email + notes; encrypted in transit = yes; deletion available = yes; no data shared/sold).

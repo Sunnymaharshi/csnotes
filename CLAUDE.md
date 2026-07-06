@@ -23,7 +23,18 @@ data model, migration, and dependency policy.
   and overflow/nav/sort render as bottom `Modal`s (`BottomSheet`; `SortMenu` self-anchors to the
   bottom). FAB stays floating (raised above the bar). The branch lives in **both** `NoteListScreen.tsx`
   **and** `app/(drawer)/trash.tsx` (near-duplicates) — change both. When ON, `SafeAreaView` drops
-  its `bottom` edge because the bars own that inset.
+  its `bottom` edge because the bars own that inset. Hardware back exits selection → closes search
+  → closes drawer, in that order.
+- **`BottomSheet`** is the one bottom-sheet component (grabber + **drag-to-dismiss** via
+  reanimated + gesture-handler). Gestures inside a RN `Modal` need their own
+  `GestureHandlerRootView` **inside** the Modal — it's already there; keep it if you touch the file.
+- **Buttons**: don't use Tamagui `<Button>` — it only registered presses on its text label here.
+  Use `PressableScale` (the standard tappable) wrapping a styled frame for full-area taps
+  (`SettingsButton` in `settings.tsx`, and inline in `sign-in.tsx`).
+- **Backups** (`src/lib/exportImport.ts`): export writes via **Storage Access Framework**
+  (`expo-file-system/legacy`) into a folder the user grants once (persisted in AsyncStorage
+  `@csnotes/backup_dir`), filename `DDMonYYYY hh-mm-ssAM/PM CS Notes.json`; import uses the
+  system file picker (`expo-document-picker`). `expo-sharing` is no longer used.
 - **Auto-linkify** (§8.2): render note text via `LinkifiedText`; detection in `src/lib/linkify.ts`,
   actions (open/copy) in `src/lib/linkActions.ts` — shared by card previews and the editor.
 - `isFavourite`/`isArchived` are independent fields; editor/bulk UI enforces mutual
