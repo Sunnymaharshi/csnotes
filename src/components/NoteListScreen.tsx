@@ -198,6 +198,11 @@ export function NoteListScreen({
             contentContainerStyle={listContentStyle}
             ItemSeparatorComponent={layout === 'grid' ? undefined : () => <View style={styles.separator} />}
             keyExtractor={(item) => item.id}
+            // FlashList v2 keeps the viewport anchored to existing items by default,
+            // so a note inserted at the top (Created/Modified-desc) lands above the
+            // fold and you'd have to over-scroll to see it. Auto-scroll to reveal it
+            // when we're near the top; deeper down we keep the user's position.
+            maintainVisibleContentPosition={{ autoscrollToTopThreshold: 150 }}
           />
         )}
 

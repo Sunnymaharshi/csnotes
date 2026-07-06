@@ -48,6 +48,13 @@
         }
       ],
       "expo-sqlite"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "f57b42ea-513b-4e46-8b57-5ba7aba3039b"
+      }
+    },
+    "owner": "sunnymaharshi"
   }
 }

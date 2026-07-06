@@ -399,16 +399,21 @@ reuses the same stored credentials (no re-signing), or download the keystore via
 independent — Play only requires every upload use the same upload key. **Free except the
 one-time $25 Play Console registration.**
 
+Progress (2026-07-06): **EAS project connected.** Some in-app code changes are planned
+**before** the first production build — do those, typecheck, then run the EAS build.
+
 Before submitting:
 
-- [ ] **Release signing (blocker).** Use **EAS-owned upload keystore** — run
+- [ ] **Release signing (blocker).** EAS is connected. After the pending code changes, run
   `eas build -p android --profile production` (free tier) and accept EAS's offer to generate +
   store the keystore (download a backup regardless). No `build.gradle` edits (native folder is
   regenerated). Enable **Play App Signing** at first upload so a lost upload key is recoverable.
 - [x] **Privacy policy (blocker).** Drafted at repo-root `PRIVACY_POLICY.md` (covers guest =
   no data, signed-in = Google email/ID + notes in Firebase, TLS + at-rest, Security Rules, no
-  third-party sharing, in-app account/data deletion). **Still TODO:** host it (GitHub Pages) and
-  add the URL to the Play Console listing + Data safety form.
+  third-party sharing, in-app account/data deletion). Published copy at `docs/index.md` via
+  **GitHub Pages** (`https://sunnymaharshi.github.io/csnotes/`, source = `main` `/docs`).
+  **Still TODO:** add the URL to the Play Console listing + Data safety form. If
+  `PRIVACY_POLICY.md` is edited, re-copy to `docs/index.md`.
 - [x] **`eas.json` `appVersionSource`.** Set to `"remote"` — EAS auto-manages `versionCode`.
 - [x] **Production Firebase project.** Confirmed `google-services.json` points at production
   project `csnotes-d3693` (`com.sunny.csnotes`).
